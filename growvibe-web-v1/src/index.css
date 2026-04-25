@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Brand ───────────────────────────── */
+  --color-primary:       #1CACF3;
+  --color-primary-light: #E8F6FE;
+  --color-primary-dark:  #0E8AD4;
+
+  /* ── Semantic ────────────────────────── */
+  --color-success:       #22C55E;
+  --color-success-light: #ECFDF5;
+  --color-warning:       #F59E0B;
+  --color-warning-light: #FFFBEB;
+  --color-danger:        #EF4444;
+  --color-danger-light:  #FEF2F2;
+  --color-info:          #1CACF3;
+  --color-info-light:    #E8F6FE;
+
+  /* ── Surfaces ────────────────────────── */
+  --color-canvas: #F5F7FA;
+  --color-card:   #FFFFFF;
+  --color-hover:  #F0F4F8;
+
+  /* ── Text ────────────────────────────── */
+  --color-ink:   #1A1D21;
+  --color-soft:  #64748B;
+  --color-muted: #94A3B8;
+
+  /* ── Borders ─────────────────────────── */
+  --color-line:       #E2E8F0;
+  --color-line-light: #F1F5F9;
+
+  /* ── Typography ──────────────────────── */
+  --font-sans: 'DM Sans', system-ui, -apple-system, sans-serif;
+
+  /* ── Layout tokens ───────────────────── */
+  --sidebar-w:           260px;
+  --sidebar-w-collapsed:  72px;
+  --header-h:             64px;
+}
+
+/* ── Fonts ─────────────────────────────── */
+@font-face { font-family:'DM Sans'; src:url('./assets/font/DMSans_18pt-Light.ttf')    format('truetype'); font-weight:300; }
+@font-face { font-family:'DM Sans'; src:url('./assets/font/DMSans_18pt-Regular.ttf')  format('truetype'); font-weight:400; }
+@font-face { font-family:'DM Sans'; src:url('./assets/font/DMSans_18pt-Medium.ttf')   format('truetype'); font-weight:500; }
+@font-face { font-family:'DM Sans'; src:url('./assets/font/DMSans_18pt-SemiBold.ttf') format('truetype'); font-weight:600; }
+@font-face { font-family:'DM Sans'; src:url('./assets/font/DMSans_24pt-Bold.ttf')     format('truetype'); font-weight:700; }
+@font-face { font-family:'DM Sans'; src:url('./assets/font/DMSans_24pt-ExtraBold.ttf')format('truetype'); font-weight:800; }
+
+/* ── Reset ─────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { height: 100%; }
+
+body {
+  height: 100%;
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  background-color: #F5F7FA;
+  color: #1A1D21;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Scrollbar ─────────────────────────── */
+::-webkit-scrollbar       { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }

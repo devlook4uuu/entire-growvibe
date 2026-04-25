@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "666590285406",
+    "project_id": "growvibe-ef1e1",
+    "storage_bucket": "growvibe-ef1e1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:666590285406:android:6f60b400e34f68ca79aecf",
+        "android_client_info": {
+          "package_name": "com.abdullah010.growvibeappv1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBjmeuvP1XZQ7LwnClGk3zSqrzljjBhpw0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

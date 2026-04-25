@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173)",
+      "Bash(kill %1)",
+      "Bash(xargs sed:*)",
+      "Bash(python3 -c ':*)",
+      "Bash(npx expo:*)",
+      "WebSearch",
+      "Bash(wc -l /Users/mac/Public/personal-projects/growvibe-v1/growvibe-web-v1/src/pages/dashboard/*.jsx)",
+      "Bash(supabase functions:*)",
+      "Bash(npx supabase:*)",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__execute_sql",
+      "mcp__claude_ai_Supabase__apply_migration",
+      "Bash(node -e ':*)",
+      "Bash(supabase --version)",
+      "mcp__claude_ai_Supabase__deploy_edge_function",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(k,v\\) for k,v in d.get\\('dependencies',{}\\).items\\(\\)]\")",
+      "Bash(npm uninstall:*)",
+      "Bash(sed -n '1,10p' /Users/mac/Public/personal-projects/growvibe-v1/growvibe-web-v1/src/pages/dashboard/OwnerDashboard.jsx)",
+      "Bash(sed -n '99,116p' /Users/mac/Public/personal-projects/growvibe-v1/growvibe-web-v1/src/pages/dashboard/OwnerDashboard.jsx)",
+      "Bash(sed -n '1,4p' /Users/mac/Public/personal-projects/growvibe-v1/growvibe-web-v1/src/pages/dashboard/PrincipalDashboard.jsx)",
+      "Bash(sed -n '31,46p' /Users/mac/Public/personal-projects/growvibe-v1/growvibe-web-v1/src/pages/dashboard/PrincipalDashboard.jsx)",
+      "Bash(sed -n '1,4p' /Users/mac/Public/personal-projects/growvibe-v1/growvibe-web-v1/src/pages/dashboard/CoordinatorDashboard.jsx)",
+      "Bash(sed -n '30,46p' /Users/mac/Public/personal-projects/growvibe-v1/growvibe-web-v1/src/pages/dashboard/CoordinatorDashboard.jsx)",
+      "Bash(sed -n '4,6p' /Users/mac/Public/personal-projects/growvibe-v1/growvibe-web-v1/src/pages/dashboard/TeacherDashboard.jsx)",
+      "Bash(grep -r \"isLoaded\\\\|isBuffering\\\\|status\\\\.\" /Users/mac/Public/personal-projects/growvibe-v1/growvibe-app-v1/node_modules/expo-audio/build/*.d.ts)",
+      "Bash(grep -rn \"image_url\\\\|avatar_url\" /Users/mac/Public/personal-projects/growvibe-v1/supabase/migrations/*chat*)"
+    ]
+  }
+}
