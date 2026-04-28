@@ -14,6 +14,22 @@ import { useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+
+// ─── Fire-and-forget push helper (web) ───────────────────────────────────────
+async function sendPush(userIds, title, body) {
+  if (!userIds || userIds.length === 0) return;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return;
+  fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push`, {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+      'apikey':        import.meta.env.VITE_SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ userIds, title, body }),
+  }).catch(() => {});
+}
 import { C, PageHeader, ActionBtn } from '../dashboard/AdminDashboard';
 import {
   makePageCache, usePageList,
@@ -163,7 +179,7 @@ function FeeRecordForm({ record, studentId, studentFee, sessionId, classId, bran
     if (!month)               return setError('Month is required.');
     if (isNaN(fa) || fa < 0)  return setError('Enter a valid fee amount.');
     if (isNaN(ap) || ap < 0)  return setError('Enter a valid amount paid.');
-    if (ap > fa)              return setError('Amount paid cannot exceed fee amount.');
+    if (ap > fa)              return setError('Amount paid cannot exceed the fee amount.');
     setError(''); setSaving(true);
     try {
       const { error: err } = await supabase.rpc('upsert_fee_record', {
@@ -179,6 +195,10 @@ function FeeRecordForm({ record, studentId, studentFee, sessionId, classId, bran
         p_description:    description.trim() || null,
       });
       if (err) throw new Error(err.message);
+      // Notify student of new fee record (fire-and-forget, new records only)
+      if (!isEdit) {
+        sendPush([studentId], 'Fee Record', `${monthLabel(month)} fee record has been created`);
+      }
       onSaved();
     } catch (e) {
       setError(e.message || 'Failed to save.');

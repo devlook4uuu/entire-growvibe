@@ -38,11 +38,11 @@ export function invalidateSupportTicketCache(uid, role) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PRIORITY_COLOR = { low: Colors.success, medium: Colors.warning, high: Colors.danger };
-const PRIORITY_BG    = { low: Colors.successLight, medium: Colors.warningLight, high: Colors.dangerLight };
+const PRIORITY_BG = { low: Colors.successLight, medium: Colors.warningLight, high: Colors.dangerLight };
 const PRIORITY_LABEL = { low: 'Low', medium: 'Medium', high: 'High' };
 
 function TicketCard({ item, onPress, showCreator }) {
-  const isOpen     = item.status === 'open';
+  const isOpen = item.status === 'open';
   const replyCount = item.support_ticket_replies?.[0]?.count ?? 0;
 
   return (
@@ -105,17 +105,17 @@ function SkeletonCard() {
 }
 
 export default function SupportTicketList() {
-  const router   = useRouter();
-  const profile  = useSelector((s) => s.auth.profile);
-  const isAdmin  = profile?.role === 'admin';
+  const router = useRouter();
+  const profile = useSelector((s) => s.auth.profile);
+  const isAdmin = profile?.role === 'admin';
 
-  const [tickets,    setTickets]    = useState([]);
-  const [loading,    setLoading]    = useState(false);
+  const [tickets, setTickets] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const hasMounted = useRef(false);
 
   const fetchTickets = useCallback(async ({ isRefresh = false } = {}) => {
-    const uid  = profile?.id;
+    const uid = profile?.id;
     const role = profile?.role;
     if (!uid) return;
 
@@ -147,7 +147,7 @@ export default function SupportTicketList() {
   }, [profile?.id, profile?.role, isAdmin]);
 
   useFocusEffect(useCallback(() => {
-    const uid  = profile?.id;
+    const uid = profile?.id;
     const role = profile?.role;
     if (!uid) return;
 
@@ -176,7 +176,7 @@ export default function SupportTicketList() {
   }
 
   return (
-    <View style={{flex: 1, backgroundColor: Colors.white}}>
+    <View style={{ flex: 1, backgroundColor: Colors.white }}>
       {/* Header */}
       <View style={S.header}>
         <View style={{ flex: 1 }}>
@@ -230,7 +230,7 @@ const S = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
   },
   headerTitle: { fontSize: hp(2), fontFamily: Fonts.semiBold, color: Colors.ink, letterSpacing: -0.3 },
-  headerSub:   { fontSize: hp(1.4), fontFamily: Fonts.regular, color: Colors.muted, marginTop: 2 },
+  headerSub: { fontSize: hp(1.4), fontFamily: Fonts.regular, color: Colors.muted, marginTop: 2 },
   newBtn: {
     width: hp(4.5), height: hp(4.5), borderRadius: 12,
     backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center',
@@ -247,21 +247,21 @@ const S = StyleSheet.create({
   statusDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
   cardTitle: { flex: 1, fontSize: hp(1.7), fontFamily: Fonts.semiBold, color: Colors.ink },
   priorityBadge: { borderRadius: 20, paddingHorizontal: wp(2), paddingVertical: 3 },
-  priorityText:  { fontSize: hp(1.2), fontFamily: Fonts.semiBold },
+  priorityText: { fontSize: hp(1.2), fontFamily: Fonts.semiBold },
   creatorName: { fontSize: hp(1.3), fontFamily: Fonts.semiBold, color: Colors.muted, marginBottom: hp(0.4), textTransform: 'capitalize' },
   cardMsg: { fontSize: hp(1.4), fontFamily: Fonts.regular, color: Colors.soft, marginBottom: hp(0.6) },
   ctaHint: { fontSize: hp(1.25), fontFamily: Fonts.regular, color: Colors.primary, marginBottom: hp(1) },
   cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   footerRight: { flexDirection: 'row', alignItems: 'center', gap: wp(2) },
-  cardDate:    { fontSize: hp(1.3), fontFamily: Fonts.regular, color: Colors.muted },
+  cardDate: { fontSize: hp(1.3), fontFamily: Fonts.regular, color: Colors.muted },
   replyBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: Colors.primaryLight ?? Colors.canvas,
     borderRadius: 20, paddingHorizontal: wp(2), paddingVertical: 3,
   },
-  replyCount:  { fontSize: hp(1.2), fontFamily: Fonts.semiBold, color: Colors.primary },
+  replyCount: { fontSize: hp(1.2), fontFamily: Fonts.semiBold, color: Colors.primary },
   statusBadge: { borderRadius: 20, paddingHorizontal: wp(2.5), paddingVertical: 3 },
-  statusText:  { fontSize: hp(1.2), fontFamily: Fonts.semiBold },
+  statusText: { fontSize: hp(1.2), fontFamily: Fonts.semiBold },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: hp(1.2) },
   emptyIcon: {
@@ -269,5 +269,5 @@ const S = StyleSheet.create({
     backgroundColor: Colors.canvas, alignItems: 'center', justifyContent: 'center',
   },
   emptyTitle: { fontSize: hp(1.9), fontFamily: Fonts.semiBold, color: Colors.ink },
-  emptySub:   { fontSize: hp(1.5), fontFamily: Fonts.regular, color: Colors.muted, textAlign: 'center', paddingHorizontal: wp(8) },
+  emptySub: { fontSize: hp(1.5), fontFamily: Fonts.regular, color: Colors.muted, textAlign: 'center', paddingHorizontal: wp(8) },
 });

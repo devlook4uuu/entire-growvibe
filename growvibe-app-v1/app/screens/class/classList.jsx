@@ -221,7 +221,21 @@ export default function ClassListScreen() {
     return (
       <ScreenWrapper>
         <ListScreenHeader router={router} title="Classes" subtitle="" onAdd={null} />
-        <ErrorState message="No active session found for your branch." onRetry={null} />
+        <View style={S.noSessionWrap}>
+          <View style={S.noSessionIconWrap}>
+            <Ionicons name="calendar-outline" size={hp(3.5)} color={Colors.primary} />
+          </View>
+          <Text style={S.noSessionTitle}>No active session</Text>
+          <Text style={S.noSessionSub}>Create a session for your branch to start managing classes.</Text>
+          <TouchableOpacity
+            style={S.noSessionBtn}
+            activeOpacity={0.85}
+            onPress={() => router.push('/screens/session/sessionList')}
+          >
+            <Ionicons name="add-circle-outline" size={hp(2)} color={Colors.white} />
+            <Text style={S.noSessionBtnText}>Create Session</Text>
+          </TouchableOpacity>
+        </View>
       </ScreenWrapper>
     );
   }
@@ -327,5 +341,33 @@ const S = StyleSheet.create({
     width: hp(3.8), height: hp(3.8), borderRadius: 10,
     backgroundColor: Colors.primaryLight,
     alignItems: 'center', justifyContent: 'center',
+  },
+
+  noSessionWrap: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: wp(8), gap: hp(1.2),
+  },
+  noSessionIconWrap: {
+    width: hp(8), height: hp(8), borderRadius: hp(4),
+    backgroundColor: Colors.primaryLight,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: hp(0.5),
+  },
+  noSessionTitle: {
+    fontSize: hp(2.1), fontFamily: Fonts.semiBold, color: Colors.ink,
+    letterSpacing: -0.3, textAlign: 'center',
+  },
+  noSessionSub: {
+    fontSize: hp(1.5), fontFamily: Fonts.regular, color: Colors.muted,
+    textAlign: 'center', lineHeight: hp(2.2),
+  },
+  noSessionBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    marginTop: hp(1), backgroundColor: Colors.primary,
+    paddingHorizontal: wp(6), paddingVertical: hp(1.4),
+    borderRadius: 12,
+  },
+  noSessionBtnText: {
+    fontSize: hp(1.7), fontFamily: Fonts.semiBold, color: Colors.white,
   },
 });

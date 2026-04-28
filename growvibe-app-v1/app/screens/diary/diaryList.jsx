@@ -221,6 +221,26 @@ export default function DiaryList() {
     });
   }
 
+  if (!classId) {
+    return (
+      <ScreenWrapper>
+        <View style={S.header}>
+          <TouchableOpacity onPress={() => router.back()} hitSlop={8} style={S.backBtn}>
+            <Ionicons name="arrow-back" size={hp(2.6)} color={Colors.ink} />
+          </TouchableOpacity>
+          <Text style={S.headerTitle}>Class Diary</Text>
+        </View>
+        <View style={S.center}>
+          <View style={S.emptyIconWrap}>
+            <Ionicons name="book-outline" size={hp(3.5)} color={Colors.purple} />
+          </View>
+          <Text style={S.emptyTitle}>No class assigned</Text>
+          <Text style={S.emptySub}>You haven't been assigned to a class yet. Contact your school for help.</Text>
+        </View>
+      </ScreenWrapper>
+    );
+  }
+
   return (
     <ScreenWrapper>
       {/* Header */}

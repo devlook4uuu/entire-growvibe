@@ -127,13 +127,14 @@ function StudentCard({ item, onEdit, onFee }) {
 function StudentForm({ student, classId, branchId, schoolId, onSave, onClose }) {
   const isEdit = !!student;
 
-  const [name,       setName]       = useState(student?.name        || '');
-  const [email,      setEmail]      = useState(student?.email       || '');
-  const [password,   setPassword]   = useState('');
-  const [studentFee, setStudentFee] = useState(student?.student_fee != null ? String(student.student_fee) : '0');
-  const [isActive,   setIsActive]   = useState(student?.is_active   ?? true);
-  const [saving,     setSaving]     = useState(false);
-  const [error,      setError]      = useState('');
+  const [name,        setName]        = useState(student?.name        || '');
+  const [email,       setEmail]       = useState(student?.email       || '');
+  const [password,    setPassword]    = useState('');
+  const [studentFee,  setStudentFee]  = useState(student?.student_fee != null ? String(student.student_fee) : '0');
+  const [biometricId, setBiometricId] = useState(student?.biometric_id || '');
+  const [isActive,    setIsActive]    = useState(student?.is_active   ?? true);
+  const [saving,      setSaving]      = useState(false);
+  const [error,       setError]       = useState('');
 
   async function handleSubmit() {
     if (!name.trim())  return setError('Name is required.');
@@ -146,8 +147,8 @@ function StudentForm({ student, classId, branchId, schoolId, onSave, onClose }) 
       const { data: { session } } = await supabase.auth.getSession();
       const fnName = isEdit ? 'update-user' : 'create-user';
       const body   = isEdit
-        ? { user_id: student.id, name: name.trim(), email: email.trim(), is_active: isActive, student_fee: Number(studentFee), ...(password ? { password } : {}) }
-        : { name: name.trim(), email: email.trim(), password, role: 'student', school_id: schoolId, branch_id: branchId, class_id: classId, student_fee: Number(studentFee) };
+        ? { user_id: student.id, name: name.trim(), email: email.trim(), is_active: isActive, student_fee: Number(studentFee), biometric_id: biometricId.trim() || null, ...(password ? { password } : {}) }
+        : { name: name.trim(), email: email.trim(), password, role: 'student', school_id: schoolId, branch_id: branchId, class_id: classId, student_fee: Number(studentFee), biometric_id: biometricId.trim() || null };
 
       const res = await supabase.functions.invoke(fnName, {
         body,
@@ -171,6 +172,9 @@ function StudentForm({ student, classId, branchId, schoolId, onSave, onClose }) 
       </Field>
       <Field label="Student Fee">
         <TextInput value={studentFee} onChange={(e) => setStudentFee(e.target.value)} placeholder="0" type="number" />
+      </Field>
+      <Field label="Biometric ID" optional>
+        <TextInput value={biometricId} onChange={(e) => setBiometricId(e.target.value)} placeholder="Device biometric identifier" />
       </Field>
       <Field label={isEdit ? 'New Password' : 'Password'} optional={isEdit}>
         <TextInput value={password} onChange={(e) => setPassword(e.target.value)} placeholder={isEdit ? 'Leave blank to keep current' : 'Min. 6 characters'} type="password" />
@@ -212,7 +216,7 @@ export default function StudentsPage() {
     buildQuery: (sb, scope, query, from, to) => {
       let q = sb
         .from('profiles')
-        .select('id, name, email, avatar_url, is_active, branch_id, school_id, class_id, student_fee, created_at')
+        .select('id, name, email, avatar_url, is_active, branch_id, school_id, class_id, student_fee, created_at, biometric_id')
         .eq('role', 'student')
         .eq('class_id', scope)
         .order('created_at', { ascending: false })

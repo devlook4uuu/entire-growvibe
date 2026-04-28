@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { supabase } from '../lib/supabase';
 import { setSelectedBranch, setSelectedSession } from './appSlice';
 import { registerForPushNotificationsAsync, deletePushToken } from '../lib/notifications';
+import { checkActiveStatus, INACTIVE_ERRORS } from '../lib/activeStatusCheck';
 
 // After loading a non-owner profile, auto-set their branch + active session
 async function resolveAndDispatchContext(profile, dispatch) {
@@ -25,9 +26,6 @@ async function resolveAndDispatchContext(profile, dispatch) {
 // ─── Error messages ───────────────────────────────────────────────────────────
 const AUTH_ERRORS = {
   INVALID_CREDENTIALS: 'Invalid email or password.',
-  ACCOUNT_INACTIVE:    'Your account is inactive. Please contact your school.',
-  SCHOOL_INACTIVE:     'Your school is currently inactive. Please contact the administrator.',
-  BRANCH_INACTIVE:     'Your branch is currently inactive. Please contact your school.',
   PROFILE_LOAD_FAILED: 'Failed to load your profile. Please try again.',
   CONNECTION_ERROR:    'Connection error. Please try again.',
 };
@@ -64,35 +62,10 @@ export const loginThunk = createAsyncThunk(
       }
 
       // isActive checks (UX layer — real enforcement is RLS)
-      if (!profile.is_active) {
+      const inactiveError = await checkActiveStatus(profile.role);
+      if (inactiveError) {
         await supabase.auth.signOut();
-        return rejectWithValue(AUTH_ERRORS.ACCOUNT_INACTIVE);
-      }
-
-      if (profile.school_id) {
-        const { data: school } = await supabase
-          .from('schools')
-          .select('is_active')
-          .eq('id', profile.school_id)
-          .maybeSingle();
-
-        if (school && !school.is_active) {
-          await supabase.auth.signOut();
-          return rejectWithValue(AUTH_ERRORS.SCHOOL_INACTIVE);
-        }
-      }
-
-      if (profile.branch_id) {
-        const { data: branch } = await supabase
-          .from('branches')
-          .select('is_active')
-          .eq('id', profile.branch_id)
-          .maybeSingle();
-
-        if (branch && !branch.is_active) {
-          await supabase.auth.signOut();
-          return rejectWithValue(AUTH_ERRORS.BRANCH_INACTIVE);
-        }
+        return rejectWithValue(inactiveError);
       }
 
       await resolveAndDispatchContext(profile, dispatch);
@@ -155,7 +128,18 @@ export const initAuthThunk = createAsyncThunk(
 
       if (error || !profile) return null;
 
+      // Run active status check on session restore
+      const inactiveError = await checkActiveStatus(profile.role);
+      if (inactiveError) {
+        await supabase.auth.signOut();
+        return { forceLogoutError: inactiveError };
+      }
+
       await resolveAndDispatchContext(profile, dispatch);
+
+      // Refresh push token on session restore (non-blocking)
+      registerForPushNotificationsAsync(session.user.id);
+
       return { session, profile };
     } catch {
       return rejectWithValue('Failed to restore session.');
@@ -186,6 +170,13 @@ const authSlice = createSlice({
     setProfile(state, action) {
       state.profile = action.payload;
     },
+    // Triggered by the periodic active-status check when a deactivation is detected
+    forceLogout(state, action) {
+      state.session = null;
+      state.profile = null;
+      state.error   = action.payload || INACTIVE_ERRORS.USER;
+      state.loading = false;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -194,7 +185,11 @@ const authSlice = createSlice({
       })
       .addCase(initAuthThunk.fulfilled, (state, action) => {
         state.loading = false;
-        if (action.payload) {
+        if (action.payload?.forceLogoutError) {
+          state.session = null;
+          state.profile = null;
+          state.error   = action.payload.forceLogoutError;
+        } else if (action.payload) {
           state.session = action.payload.session;
           state.profile = action.payload.profile;
         }
@@ -234,5 +229,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearAuth, clearError, setProfile } = authSlice.actions;
+export const { clearAuth, clearError, setProfile, forceLogout } = authSlice.actions;
 export default authSlice.reducer;

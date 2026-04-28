@@ -233,22 +233,26 @@ export default function ChatTab() {
       const from = page * PAGE_SIZE;
       const to   = from + PAGE_SIZE - 1;
 
-      // Query: chat_members → chats, include can_send_message for this user
-      let dbq = supabase
+      // Query: chat_members → chats, include can_send_message for this user.
+      // Note: .ilike() on a joined foreign table column is not supported by
+      // Supabase PostgREST — we fetch all and filter client-side instead.
+      const dbq = supabase
         .from('chat_members')
         .select('chat_id, can_send_message, chats(id, name, image_url, branch_id, class_id, created_at)')
         .eq('profile_id', uid)
         .range(from, to)
         .order('chat_id', { ascending: false });
 
-      if (q) dbq = dbq.ilike('chats.name', `%${q}%`);
-
       const { data, error: err } = await dbq;
       if (myId !== fetchId.current) return;
       if (err) { setError(err.message); return; }
 
-      // Collect unique chat IDs + branch IDs for follow-up queries
-      const memberRows = (data || []).filter((m) => m.chats);
+      // Filter by search query client-side (PostgREST does not support
+      // .ilike() filtering on embedded foreign table columns).
+      const allRows  = (data || []).filter((m) => m.chats);
+      const memberRows = q
+        ? allRows.filter((m) => m.chats.name?.toLowerCase().includes(q))
+        : allRows;
       const chatIds  = memberRows.map((m) => m.chat_id);
       const branchIds = [...new Set(memberRows.map((m) => m.chats.branch_id).filter(Boolean))];
 

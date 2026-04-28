@@ -38,6 +38,7 @@ export default function SupportTicketForm() {
   async function handleSubmit() {
     if (!title.trim())   { setError('Title is required.'); return; }
     if (!message.trim()) { setError('Message is required.'); return; }
+    if (!profile?.school_id) { setError('Unable to submit ticket — school not found.'); return; }
 
     setSaving(true);
     setError('');

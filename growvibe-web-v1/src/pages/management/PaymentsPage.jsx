@@ -1,6 +1,22 @@
 import { useState } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+
+// ─── Fire-and-forget push helper ─────────────────────────────────────────────
+async function sendPush(userIds, title, body) {
+  if (!userIds || userIds.length === 0) return;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return;
+  fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push`, {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+      'apikey':        import.meta.env.VITE_SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ userIds, title, body }),
+  }).catch(() => {});
+}
 import { C, Card, PageHeader, ActionBtn } from '../dashboard/AdminDashboard';
 import {
   makePageCache, usePageList,
@@ -129,6 +145,16 @@ function PaymentForm({ schoolId, payment, onSave, onClose }) {
       if (!isEdit) {
         const { error: err } = await supabase.from('subscription_payments').insert(record);
         if (err) throw new Error(err.message);
+        // Notify school owner (fire-and-forget)
+        const { data: owner } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('school_id', schoolId)
+          .eq('role', 'owner')
+          .maybeSingle();
+        if (owner?.id) {
+          sendPush([owner.id], 'Payment', `A payment has been recorded for ${month.trim()}`);
+        }
       } else {
         const { error: err } = await supabase.from('subscription_payments')
           .update({ ...record, updated_at: new Date().toISOString() }).eq('id', payment.id);
@@ -147,7 +173,11 @@ function PaymentForm({ schoolId, payment, onSave, onClose }) {
       <Field label="Payment Month"><TextInput value={month} onChange={(e) => setMonth(e.target.value)} placeholder="e.g. April 2026" /></Field>
       <Field label="Total Fee (PKR)"><TextInput value={fee} onChange={(e) => handleFeeChange(e.target.value)} placeholder="0" /></Field>
       <Field label="Amount Paid (PKR)"><TextInput value={amountPaid} onChange={(e) => handleAmountPaidChange(e.target.value)} placeholder="0" /></Field>
-      <Field label="Remaining Due (PKR)"><TextInput value={remaining} onChange={(e) => setRemaining(e.target.value)} placeholder="0" /></Field>
+      <Field label="Remaining Due (PKR)">
+        <div style={{ height: 40, borderRadius: 8, border: `1.5px solid ${C.borderLight}`, backgroundColor: C.canvas, display: 'flex', alignItems: 'center', paddingInline: 12, fontSize: 13, color: C.muted, userSelect: 'none' }}>
+          {remaining !== '' ? Number(remaining).toLocaleString() : '0'}
+        </div>
+      </Field>
       <Field label="Payment Method"><ChipSelector options={PAYMENT_METHODS} value={method} onChange={setMethod} /></Field>
       <Field label="Payment Status"><ChipSelector options={PAYMENT_STATUSES} value={status} onChange={setStatus} /></Field>
       <Field label="Description" optional><TextInput value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Any notes about this payment…" /></Field>

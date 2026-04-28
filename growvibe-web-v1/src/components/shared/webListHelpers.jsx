@@ -104,7 +104,8 @@ export function usePageList({ cache, scope = '', pageSize, buildQuery }) {
     try {
       const from = page * pageSize;
       const to   = from + pageSize - 1;
-      const q    = buildQueryRef.current(supabase, scope, query, from, to);
+      const q = buildQueryRef.current(supabase, scope, query, from, to);
+      if (!q) return; // buildQuery returned null — skip fetch (e.g. missing required param)
       const { data, error: err } = await q;
 
       if (myId !== fetchId.current) return;

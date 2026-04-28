@@ -5,11 +5,14 @@ import { Platform } from 'react-native';
 import { supabase } from './supabase';
 
 // ─── Notification behaviour while app is foregrounded ────────────────────────
+// Suppress the OS banner when the app is active — InAppNotification handles it.
+// The notification is still delivered to addNotificationReceivedListener.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge:  false,
+    shouldShowBanner: false,
+    shouldShowList:   false,
+    shouldPlaySound:  false,
+    shouldSetBadge:   false,
   }),
 });
 
@@ -73,6 +76,38 @@ export async function registerForPushNotificationsAsync(userId) {
   }
 }
 
+// ─── sendPush ─────────────────────────────────────────────────────────────────
+// Calls the send-push Edge Function to deliver a push notification to a list
+// of users. Fire-and-forget — errors are logged but never thrown.
+//
+//   userIds  — array of profile UUIDs to notify
+//   title    — notification title string
+//   body     — notification body string
+//   data     — optional extra payload (object)
+
+export async function sendPush(userIds, title, body, data = {}) {
+  if (!userIds || userIds.length === 0) return;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    await fetch(
+      `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-push`,
+      {
+        method:  'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey':        process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ userIds, title, body, data }),
+      }
+    );
+  } catch (err) {
+    console.warn('[notifications] sendPush error:', err);
+  }
+}
+
 // ─── deletePushToken ──────────────────────────────────────────────────────────
 // Call on logout. Removes the user's token from Supabase so they stop receiving
 // notifications after signing out.
@@ -80,8 +115,9 @@ export async function registerForPushNotificationsAsync(userId) {
 export async function deletePushToken(userId) {
   if (!userId) return;
   try {
-    await supabase.from('push_tokens').delete().eq('user_id', userId);
+    const { error } = await supabase.from('push_tokens').delete().eq('user_id', userId);
+    if (error) console.error('[notifications] deletePushToken failed:', error.message);
   } catch (err) {
-    console.warn('[notifications] deletePushToken error:', err);
+    console.error('[notifications] deletePushToken unexpected error:', err);
   }
 }

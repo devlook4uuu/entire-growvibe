@@ -25,6 +25,7 @@ import { Fonts } from '../../../constant/fonts';
 import { hp, wp } from '../../../helpers/dimension';
 import { ScreenWrapper } from '../../../helpers/screenWrapper';
 import { supabase } from '../../../lib/supabase';
+import { sendPush } from '../../../lib/notifications';
 
 const MAX_SELECT = 5;
 
@@ -170,6 +171,14 @@ export default function GrowTaskSubmit() {
       // Mark panel as submitted
       setSubmitted((s) => ({ ...s, [category]: true }));
       setSelected((s) => ({ ...s, [category]: new Set() }));
+      // Notify awarded students (fire-and-forget)
+      const panelLabel = PANELS.find((p) => p.key === category)?.label ?? category;
+      sendPush(
+        ids,
+        'GrowCoins',
+        `You received ${task.coins_reward} GrowCoins for ${panelLabel} Improved. Keep it up!`,
+        { type: 'grow_coins', category },
+      );
     } catch (e) {
       setError((ev) => ({ ...ev, [category]: e.message }));
     } finally {

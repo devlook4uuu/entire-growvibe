@@ -14,6 +14,22 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { C, PageHeader, useBreakpoint } from '../dashboard/AdminDashboard';
 
+// ─── Fire-and-forget push helper (web) ───────────────────────────────────────
+async function sendPush(userIds, title, body) {
+  if (!userIds || userIds.length === 0) return;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return;
+  fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push`, {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+      'apikey':        import.meta.env.VITE_SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ userIds, title, body }),
+  }).catch(() => {});
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 const STATUS_COLOR   = { present: '#22C55E', absent: '#EF4444', late: '#F59E0B', leave: '#8B5CF6' };
 const STATUS_BG      = { present: '#ECFDF5', absent: '#FEF2F2', late: '#FFFBEB', leave: '#F5F3FF' };
@@ -86,17 +102,19 @@ export default function StudentAttendancePage() {
   const isManager = ['owner', 'principal', 'coordinator'].includes(profile?.role);
   const isTeacher = profile?.role === 'teacher';
 
-  // Resolve sessionId + branchId from class when not in URL params
+  // Resolve sessionId + branchId from class record.
+  // Always fetch from DB — owners have no branch_id on their profile,
+  // and sessionId in URL params may not include branchId.
   const [sessionId, setSessionId] = useState(paramSessionId || null);
   const [branchId,  setBranchId]  = useState(profile?.branch_id || null);
-  const [resolving, setResolving] = useState(!paramSessionId && !!classId);
+  const [resolving, setResolving] = useState(!!classId);
 
   useEffect(() => {
-    if (paramSessionId || !classId) { setResolving(false); return; }
+    if (!classId) { setResolving(false); return; }
     supabase
       .from('classes').select('session_id, branch_id').eq('id', classId).maybeSingle()
       .then(({ data }) => {
-        if (data?.session_id) setSessionId(data.session_id);
+        if (data?.session_id && !paramSessionId) setSessionId(data.session_id);
         if (data?.branch_id)  setBranchId(data.branch_id);
         setResolving(false);
       });
@@ -183,6 +201,13 @@ export default function StudentAttendancePage() {
         p_records:    records,
       });
       if (err) throw err;
+
+      // Notify absent/late students (fire-and-forget)
+      const absentIds = records.filter((r) => r.status === 'absent').map((r) => r.student_id);
+      const lateIds   = records.filter((r) => r.status === 'late').map((r) => r.student_id);
+      if (absentIds.length > 0) sendPush(absentIds, 'Attendance', 'Your attendance has been marked: Absent');
+      if (lateIds.length > 0)   sendPush(lateIds,   'Attendance', 'Your attendance has been marked: Late');
+
       setLocalStatuses({});
       await fetchData();
     } catch (e) {

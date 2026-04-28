@@ -17,33 +17,87 @@ import { supabase } from '../../lib/supabase';
 import { useAttendanceProgress } from '../../hooks/useAttendanceProgress';
 import { SkeletonWidget } from '../../components/Skeleton';
 
-// ─── Role-based stats ─────────────────────────────────────────────────────────
-const STATS = {
-  admin: [
-    { label: 'Total Schools',  value: '24',   icon: 'business-outline',        accent: Colors.primary,  bg: Colors.primaryLight },
-    { label: 'Total Owners',   value: '24',   icon: 'person-outline',          accent: Colors.purple,   bg: Colors.purpleLight },
-    { label: 'Total Revenue',  value: '124k', icon: 'cash-outline',            accent: Colors.success,  bg: Colors.successLight },
-    { label: 'Active Users',   value: '3.2k', icon: 'people-outline',          accent: Colors.orange,   bg: Colors.orangeLight },
-  ],
-  owner: [
-    { label: 'Branches',       value: '6',    icon: 'git-branch-outline',      accent: Colors.primary,  bg: Colors.primaryLight },
-    { label: 'Students',       value: '840',  icon: 'school-outline',          accent: Colors.purple,   bg: Colors.purpleLight },
-    { label: 'Staff',          value: '58',   icon: 'people-outline',          accent: Colors.success,  bg: Colors.successLight },
-    { label: 'Revenue',        value: '42k',  icon: 'cash-outline',            accent: Colors.orange,   bg: Colors.orangeLight },
-  ],
-  principal: [
-    { label: 'Classes',        value: '18',   icon: 'library-outline',         accent: Colors.primary,  bg: Colors.primaryLight },
-    { label: 'Students',       value: '620',  icon: 'school-outline',          accent: Colors.purple,   bg: Colors.purpleLight },
-    { label: 'Teachers',       value: '34',   icon: 'people-outline',          accent: Colors.success,  bg: Colors.successLight },
-    { label: "Today's Att.",   value: '91%',  icon: 'checkmark-circle-outline', accent: Colors.orange,  bg: Colors.orangeLight },
-  ],
-  coordinator: [
-    { label: 'My Classes',     value: '4',    icon: 'library-outline',         accent: Colors.primary,  bg: Colors.primaryLight },
-    { label: 'Students',       value: '120',  icon: 'school-outline',          accent: Colors.purple,   bg: Colors.purpleLight },
-    { label: 'Pending Tasks',  value: '7',    icon: 'hourglass-outline',       accent: Colors.warning,  bg: Colors.warningLight },
-    { label: 'Announcements',  value: '3',    icon: 'megaphone-outline',       accent: Colors.orange,   bg: Colors.orangeLight },
-  ],
-};
+// ─── Real stats hook ─────────────────────────────────────────────────────────
+function useHomeStats(role, profile, selectedBranchId, selectedSessionId) {
+  const [stats, setStats] = useState(null); // null = loading
+
+  useEffect(() => {
+    if (!role || !profile) return;
+
+    async function load() {
+      try {
+        if (role === 'admin') {
+          const [{ count: schools }, { count: owners }] = await Promise.all([
+            supabase.from('schools').select('id', { count: 'exact', head: true }),
+            supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'owner').eq('is_active', true),
+          ]);
+          setStats([
+            { label: 'Total Schools', value: String(schools ?? 0), icon: 'business-outline',   accent: Colors.primary, bg: Colors.primaryLight },
+            { label: 'Total Owners',  value: String(owners  ?? 0), icon: 'person-outline',     accent: Colors.purple,  bg: Colors.purpleLight },
+          ]);
+
+        } else if (role === 'owner' && profile.school_id) {
+          const [{ count: branches }, { count: students }, { count: staff }, { data: feeData }] = await Promise.all([
+            supabase.from('branches').select('id', { count: 'exact', head: true }).eq('school_id', profile.school_id).eq('is_active', true),
+            supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('school_id', profile.school_id).eq('role', 'student').eq('is_active', true),
+            supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('school_id', profile.school_id).in('role', ['principal', 'coordinator', 'teacher']).eq('is_active', true),
+            supabase.from('student_fee_records').select('amount_paid').eq('school_id', profile.school_id),
+          ]);
+          const revenue = (feeData || []).reduce((sum, r) => sum + (Number(r.amount_paid) || 0), 0);
+          const revenueStr = revenue >= 1_000_000
+            ? `${(revenue / 1_000_000).toFixed(1)}M`
+            : revenue >= 1_000
+              ? `${Math.round(revenue / 1_000)}k`
+              : String(revenue);
+          setStats([
+            { label: 'Branches', value: String(branches ?? 0), icon: 'git-branch-outline', accent: Colors.primary, bg: Colors.primaryLight },
+            { label: 'Students', value: String(students  ?? 0), icon: 'school-outline',    accent: Colors.purple,  bg: Colors.purpleLight },
+            { label: 'Staff',    value: String(staff     ?? 0), icon: 'people-outline',    accent: Colors.success, bg: Colors.successLight },
+            { label: 'Revenue',  value: revenueStr,             icon: 'cash-outline',      accent: Colors.orange,  bg: Colors.orangeLight },
+          ]);
+
+        } else if (role === 'principal' && profile.branch_id && selectedSessionId) {
+          const todayStr = new Date().toISOString().split('T')[0];
+          const [{ count: classes }, { count: students }, { count: teachers }, { data: attData }] = await Promise.all([
+            supabase.from('classes').select('id', { count: 'exact', head: true }).eq('branch_id', profile.branch_id).eq('session_id', selectedSessionId),
+            supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('branch_id', profile.branch_id).eq('role', 'student').eq('is_active', true),
+            supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('branch_id', profile.branch_id).eq('role', 'teacher').eq('is_active', true),
+            supabase.from('attendance').select('status').eq('branch_id', profile.branch_id).eq('session_id', selectedSessionId).eq('role', 'student').eq('date', todayStr),
+          ]);
+          const attRows   = attData || [];
+          const present   = attRows.filter((r) => r.status === 'present' || r.status === 'late').length;
+          const attPct    = attRows.length > 0 ? `${Math.round((present / attRows.length) * 100)}%` : '—';
+          setStats([
+            { label: 'Classes',       value: String(classes  ?? 0), icon: 'library-outline',          accent: Colors.primary, bg: Colors.primaryLight },
+            { label: 'Students',      value: String(students ?? 0), icon: 'school-outline',           accent: Colors.purple,  bg: Colors.purpleLight },
+            { label: 'Teachers',      value: String(teachers ?? 0), icon: 'people-outline',           accent: Colors.success, bg: Colors.successLight },
+            { label: "Today's Att.",  value: attPct,                icon: 'checkmark-circle-outline', accent: Colors.orange,  bg: Colors.orangeLight },
+          ]);
+
+        } else if (role === 'coordinator' && profile.branch_id && selectedSessionId) {
+          const [{ count: classes }, { count: students }] = await Promise.all([
+            supabase.from('classes').select('id', { count: 'exact', head: true }).eq('branch_id', profile.branch_id).eq('session_id', selectedSessionId),
+            supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('branch_id', profile.branch_id).eq('role', 'student').eq('is_active', true),
+          ]);
+          setStats([
+            { label: 'Classes',  value: String(classes  ?? 0), icon: 'library-outline', accent: Colors.primary, bg: Colors.primaryLight },
+            { label: 'Students', value: String(students ?? 0), icon: 'school-outline',  accent: Colors.purple,  bg: Colors.purpleLight },
+          ]);
+
+        } else {
+          setStats([]);
+        }
+      } catch {
+        setStats([]);
+      }
+    }
+
+    setStats(null); // reset to loading state whenever inputs change
+    load();
+  }, [role, profile?.id, profile?.school_id, profile?.branch_id, selectedBranchId, selectedSessionId]);
+
+  return stats;
+}
 
 // ─── Role-based management sections ──────────────────────────────────────────
 // Each role has sections; each section has a title + list items (one per row)
@@ -97,7 +151,14 @@ const MANAGEMENT = {
       ],
     },
   ],
-  student: [],
+  student: [
+    {
+      title: 'My Records',
+      items: [
+        { label: 'Fee Records', sublabel: 'View your monthly fee history', icon: 'receipt-outline', accent: Colors.primary, bg: Colors.primaryLight, route: '__student_fees__' },
+      ],
+    },
+  ],
 };
 
 const ATTENDANCE_STATUS_COLOR = {
@@ -492,6 +553,27 @@ function StudentDiaryCard({ profile, router }) {
   );
 }
 
+// ─── Student GrowCoins Balance Card ─────────────────────────────────────────
+function StudentGrowCoinsCard({ profile }) {
+  const coins = profile?.grow_coins ?? 0;
+  return (
+    <View style={W.card}>
+      <View style={W.cardHeader}>
+        <View style={[W.iconWrap, { backgroundColor: Colors.orangeLight }]}>
+          <Ionicons name="trophy-outline" size={hp(2.4)} color={Colors.orange} />
+        </View>
+        <Text style={W.cardTitle}>GrowCoins Balance</Text>
+      </View>
+      <View style={[W.statusChip, { backgroundColor: Colors.orangeLight }]}>
+        <Ionicons name="star" size={hp(2)} color={Colors.orange} />
+        <Text style={[W.statusText, { color: Colors.orange, fontFamily: Fonts.semiBold }]}>
+          {coins.toLocaleString()} {coins === 1 ? 'coin' : 'coins'}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 // ─── Stat Card (2-per-row) ────────────────────────────────────────────────────
 function StatCard({ label, value, icon, accent, bg }) {
   return (
@@ -528,8 +610,8 @@ export default function HomeScreen() {
   const role    = profile?.role;
   const { selectedBranchId, selectedSessionId } = useSelector((s) => s.app);
   const { banners } = useBanners(profile?.id);
+  const stats = useHomeStats(role, profile, selectedBranchId, selectedSessionId);
 
-  const stats = STATS[role] || null;
   // For teacher: only show attendance items if they have a class assigned
   const rawSections = MANAGEMENT[role] || null;
   const sections = role === 'teacher' && !profile?.class_id
@@ -590,6 +672,10 @@ export default function HomeScreen() {
       router.push('/screens/diary/diaryList');
       return;
     }
+    if (item.route === '__student_fees__') {
+      router.push('/screens/fee/studentFeeList');
+      return;
+    }
     router.push(item.route);
   }
 
@@ -604,7 +690,11 @@ export default function HomeScreen() {
         <View style={{ paddingHorizontal: wp(4), paddingTop: hp(4) }}>
           <View className="flex-row items-center" style={{ gap: wp(1) }}>
             <Text className="text-gray-600 tracking-[-1]" style={{ fontSize: wp(5), fontFamily: Fonts.regular }}>Welcome back</Text>
-            <Image source={require('../../assets/images/hi-image.jpg')} style={{ width: wp(5), height: wp(5) }} contentFit="contain" cachePolicy="disk" />
+            {profile?.avatar_url && profile.avatar_url.startsWith('http') ? (
+              <Image source={{ uri: profile.avatar_url }} style={{ width: wp(5), height: wp(5), borderRadius: wp(2.5) }} contentFit="cover" cachePolicy="disk" />
+            ) : (
+              <Image source={require('../../assets/images/hi-image.jpg')} style={{ width: wp(5), height: wp(5) }} contentFit="contain" cachePolicy="disk" />
+            )}
           </View>
           <Text className="text-gray-800 tracking-[-2]" style={{ fontSize: wp(10), fontFamily: Fonts.semiBold }}>{profile?.name || role}!</Text>
         </View>
@@ -617,7 +707,21 @@ export default function HomeScreen() {
         )}
 
         {/* ── Stats Section ── */}
-        {stats && (
+        {/* stats === null means loading; [] means no stats for this role */}
+        {stats === null && ['admin', 'owner', 'principal', 'coordinator'].includes(role) && (
+          <View style={S.section}>
+            <View style={S.statsGrid}>
+              {Array.from({ length: role === 'admin' || role === 'coordinator' ? 2 : 4 }).map((_, i) => (
+                <View key={i} style={[S.statCard, { backgroundColor: Colors.canvas }]}>
+                  <View style={{ width: hp(4.4), height: hp(4.4), borderRadius: 12, backgroundColor: Colors.borderLight, marginBottom: hp(0.8) }} />
+                  <View style={{ width: '60%', height: hp(2.8), borderRadius: 6, backgroundColor: Colors.borderLight, marginBottom: hp(0.4) }} />
+                  <View style={{ width: '80%', height: hp(1.4), borderRadius: 4, backgroundColor: Colors.borderLight }} />
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+        {stats && stats.length > 0 && (
           <View style={S.section}>
             <View style={S.statsGrid}>
               {stats.map((stat) => (
@@ -648,6 +752,13 @@ export default function HomeScreen() {
         {role === 'student' && profile?.class_id && (
           <View style={S.section}>
             <StudentDiaryCard profile={profile} router={router} />
+          </View>
+        )}
+
+        {/* ── Student GrowCoins Balance ── */}
+        {role === 'student' && (
+          <View style={S.section}>
+            <StudentGrowCoinsCard profile={profile} />
           </View>
         )}
 

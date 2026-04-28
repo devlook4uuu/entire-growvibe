@@ -17,6 +17,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
+import { sendPush } from '../lib/notifications';
 
 const TTL = 60_000;
 const cache = {};
@@ -86,6 +87,7 @@ export function useStudentAttendance(classId, sessionId, date, canEdit = false) 
           .select('id, name, avatar_url')
           .eq('class_id', classId)
           .eq('role', 'student')
+          .eq('is_active', true)
           .order('name', { ascending: true }),
         supabase
           .from('attendance')
@@ -164,6 +166,12 @@ export function useStudentAttendance(classId, sessionId, date, canEdit = false) 
         })),
       });
       if (err) throw err;
+
+      // Notify absent/late students (fire-and-forget)
+      const absentIds = records.filter((r) => r.status === 'absent').map((r) => r.studentId);
+      const lateIds   = records.filter((r) => r.status === 'late').map((r) => r.studentId);
+      if (absentIds.length > 0) sendPush(absentIds, 'Attendance', 'Your attendance has been marked: Absent').catch(() => {});
+      if (lateIds.length > 0)   sendPush(lateIds,   'Attendance', 'Your attendance has been marked: Late').catch(() => {});
 
       // Invalidate and refetch
       invalidateStudentAttendanceCache(classId, date);

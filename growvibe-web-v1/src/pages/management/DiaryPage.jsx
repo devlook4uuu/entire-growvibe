@@ -245,6 +245,36 @@ function DiaryForm({ diary, classId, schoolId, branchId, profile, onSave, onClos
           expire_date: expireDate, subjects: subs,
         });
         if (err) throw err;
+        // Notify students in the class (fire-and-forget)
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (!session) return;
+          supabase
+            .from('profiles')
+            .select('id')
+            .eq('class_id', classId)
+            .eq('role', 'student')
+            .eq('is_active', true)
+            .then(({ data: students }) => {
+              if (!students || students.length === 0) return;
+              fetch(
+                `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type':  'application/json',
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'apikey':        import.meta.env.VITE_SUPABASE_ANON_KEY,
+                  },
+                  body: JSON.stringify({
+                    userIds: students.map((s) => s.id),
+                    title:   'New diary entry posted',
+                    body:    title.trim(),
+                    data:    { type: 'diary', classId },
+                  }),
+                }
+              ).catch(() => {});
+            });
+        });
       }
       onSave();
     } catch (e) {

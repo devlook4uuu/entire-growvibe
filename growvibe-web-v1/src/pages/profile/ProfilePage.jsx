@@ -496,7 +496,7 @@ export default function ProfilePage() {
                 </span>
               </span>
             </div>
-            {profile?.grow_coins != null && (
+            {profile?.role === 'student' && profile?.grow_coins != null && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 12, color: C.muted, fontFamily: FONT }}>GrowCoins</span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: C.warning, fontFamily: FONT }}>★ {profile.grow_coins.toLocaleString()}</span>

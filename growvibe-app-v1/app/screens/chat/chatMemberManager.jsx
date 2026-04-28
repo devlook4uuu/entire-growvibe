@@ -244,7 +244,9 @@ function ChatSettingsTab({ chatId, schoolId, initialName, initialImageUrl, onSav
       if (imageUri) {
         // Upload new image — deletes old one first (handled inside uploadImage)
         const ext  = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
-        const path = `${schoolId}/chat-covers/${chatId}.${ext}`;
+        const safeSchoolId = (schoolId || '').replace(/[^a-zA-Z0-9\-_]/g, '');
+        const safeChatId   = (chatId   || '').replace(/[^a-zA-Z0-9\-_]/g, '');
+        const path = `${safeSchoolId}/chat-covers/${safeChatId}.${ext}`;
         const uploaded = await uploadImage({
           bucket:       'chat-images',
           path,

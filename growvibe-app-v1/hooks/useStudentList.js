@@ -1,13 +1,18 @@
 /**
- * useStudentList(classId)
+ * useStudentList(classId, viewerRole)
  *
  * Class-scoped student list hook.
  * Cache key: `${classId}|${query}`
+ *
+ * student_fee is only included for staff roles (owner, principal, coordinator, teacher).
+ * Student role never receives fee data.
  */
 
 import { makeListCache, useBaseList } from './useBaseList';
 
 const PAGE_SIZE = 10;
+
+const ROLES_WITH_FEE_ACCESS = ['owner', 'principal', 'coordinator', 'teacher'];
 
 const cache = makeListCache(
   'student',
@@ -25,7 +30,12 @@ export function invalidateAllStudentCache() {
   cache.invalidateAll();
 }
 
-export function useStudentList(classId) {
+export function useStudentList(classId, viewerRole) {
+  const showFee = ROLES_WITH_FEE_ACCESS.includes(viewerRole);
+  const selectFields = showFee
+    ? 'id, name, email, avatar_url, is_active, branch_id, school_id, class_id, student_fee, created_at'
+    : 'id, name, email, avatar_url, is_active, branch_id, school_id, class_id, created_at';
+
   return useBaseList({
     cache,
     scope: classId ?? '',
@@ -33,7 +43,7 @@ export function useStudentList(classId) {
     buildQuery: (supabase, scope, query, from, to) => {
       let q = supabase
         .from('profiles')
-        .select('id, name, email, avatar_url, is_active, branch_id, school_id, class_id, student_fee, created_at')
+        .select(selectFields)
         .eq('role', 'student')
         .eq('class_id', scope)
         .order('created_at', { ascending: false })

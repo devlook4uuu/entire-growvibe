@@ -1,12 +1,15 @@
-import { useEffect } from 'react';
-import { View, Image, ActivityIndicator, StyleSheet } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { View, Image, ActivityIndicator, StyleSheet, AppState } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import { Provider, useDispatch, useSelector } from 'react-redux';
 import { store } from '../store';
-import { initAuthThunk } from '../store/authSlice';
+import { initAuthThunk, forceLogout } from '../store/authSlice';
+import { supabase } from '../lib/supabase';
+import { checkActiveStatus } from '../lib/activeStatusCheck';
 import { Colors } from '../constant/colors';
+import InAppNotification from '../components/InAppNotification';
 import '../global.css';
 
 SplashScreen.preventAutoHideAsync();
@@ -53,6 +56,54 @@ function AuthGuard() {
   return null;
 }
 
+// ─── Periodic active-status check ────────────────────────────────────────────
+function ActiveStatusGuard() {
+  const dispatch  = useDispatch();
+  const { profile } = useSelector((s) => s.auth);
+  const intervalRef  = useRef(null);
+  const appStateRef  = useRef(AppState.currentState);
+
+  useEffect(() => {
+    if (!profile) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
+
+    async function runCheck() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const error = await checkActiveStatus(profile.role);
+      if (error) {
+        await supabase.auth.signOut();
+        dispatch(forceLogout(error));
+      }
+    }
+
+    // Run immediately, then every 5 minutes
+    runCheck();
+    intervalRef.current = setInterval(runCheck, 5 * 60 * 1000);
+
+    // Also run whenever app comes to foreground
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (appStateRef.current !== 'active' && nextState === 'active') {
+        runCheck();
+      }
+      appStateRef.current = nextState;
+    });
+
+    return () => {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+      sub.remove();
+    };
+  }, [profile?.id, dispatch]);
+
+  return null;
+}
+
 // ─── RootLayout inner ────────────────────────────────────────────────────────
 function RootLayoutInner() {
   const dispatch = useDispatch();
@@ -87,7 +138,9 @@ function RootLayoutInner() {
   return (
     <>
       <AuthGuard />
+      <ActiveStatusGuard />
       <Stack screenOptions={{ headerShown: false }} />
+      <InAppNotification />
     </>
   );
 }

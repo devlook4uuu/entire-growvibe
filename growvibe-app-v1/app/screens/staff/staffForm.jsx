@@ -88,7 +88,7 @@ export default function StaffFormScreen() {
       setFetching(true);
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, name, email, avatar_url, is_active, created_at, branch_id, school_id, class_id')
+        .select('id, name, email, avatar_url, is_active, created_at, branch_id, school_id, class_id, biometric_id')
         .eq('id', staffId)
         .single();
 
@@ -107,16 +107,22 @@ export default function StaffFormScreen() {
   // ── Create handler ─────────────────────────────────────────────────────────
   async function handleCreate(values, { setSubmitting }) {
     setSaveError('');
+    if (!branchId || !schoolId) {
+      setSaveError('Branch or school not found. Please go back and try again.');
+      setSubmitting(false);
+      return;
+    }
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const response = await supabase.functions.invoke('create-user', {
         body: {
-          name:      values.name.trim(),
-          email:     values.email.trim(),
-          password:  values.password,
+          name:         values.name.trim(),
+          email:        values.email.trim(),
+          password:     values.password,
           role,
-          school_id: schoolId,
-          branch_id: branchId,
+          school_id:    schoolId,
+          branch_id:    branchId,
+          biometric_id: values.biometric_id.trim() || null,
         },
         headers: { Authorization: `Bearer ${session?.access_token}` },
       });
@@ -138,10 +144,11 @@ export default function StaffFormScreen() {
     setSaveError('');
     try {
       const body = {
-        user_id:   staff.id,
-        name:      values.name.trim(),
-        email:     values.email.trim(),
-        is_active: isActive,
+        user_id:      staff.id,
+        name:         values.name.trim(),
+        email:        values.email.trim(),
+        is_active:    isActive,
+        biometric_id: values.biometric_id.trim() || null,
       };
       if (values.password) body.password = values.password;
 
@@ -246,9 +253,10 @@ export default function StaffFormScreen() {
 
           <Formik
             initialValues={{
-              name:     staff?.name  || '',
-              email:    staff?.email || '',
-              password: '',
+              name:         staff?.name         || '',
+              email:        staff?.email        || '',
+              password:     '',
+              biometric_id: staff?.biometric_id || '',
             }}
             validationSchema={isEdit ? EditSchema : CreateSchema}
             onSubmit={isEdit ? handleEdit : handleCreate}
@@ -280,6 +288,19 @@ export default function StaffFormScreen() {
                     onChangeText={handleChange('email')}
                     onBlur={handleBlur('email')}
                     error={touched.email && errors.email}
+                  />
+                </View>
+
+                <SectionLabel>Additional</SectionLabel>
+
+                <View style={S.fieldGroup}>
+                  <Text style={S.fieldLabel}>Biometric ID <Text style={S.fieldOptional}>(Optional)</Text></Text>
+                  <Input
+                    type="text"
+                    placeholder="Device biometric identifier"
+                    value={values.biometric_id}
+                    onChangeText={handleChange('biometric_id')}
+                    onBlur={handleBlur('biometric_id')}
                   />
                 </View>
 
@@ -414,7 +435,8 @@ const S = StyleSheet.create({
   },
   fieldGroup: { gap: hp(0.6) },
   fieldLabel: { fontSize: hp(1.5), fontFamily: Fonts.medium, color: Colors.soft, marginLeft: 2 },
-  fieldHint:  { fontSize: hp(1.3), fontFamily: Fonts.regular, color: Colors.muted, marginLeft: 2 },
+  fieldHint:     { fontSize: hp(1.3), fontFamily: Fonts.regular, color: Colors.muted, marginLeft: 2 },
+  fieldOptional: { fontSize: hp(1.4), fontFamily: Fonts.regular, color: Colors.muted },
 
   statusRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

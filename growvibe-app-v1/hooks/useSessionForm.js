@@ -42,16 +42,8 @@ export function useSessionForm(branchId, schoolId, sessionId) {
     try {
       if (!isEdit) {
         // ── Create ────────────────────────────────────────────────────────────
-        // If activating: deactivate any existing active session for this branch first
-        if (is_active) {
-          await supabase
-            .from('sessions')
-            .update({ is_active: false, updated_at: new Date().toISOString() })
-            .eq('branch_id', branchId)
-            .eq('is_active', true);
-        }
-
-        const { error } = await supabase
+        // Insert with is_active=false first, then atomically activate via RPC if needed.
+        const { data: inserted, error: insertError } = await supabase
           .from('sessions')
           .insert({
             school_id:     schoolId,
@@ -59,23 +51,22 @@ export function useSessionForm(branchId, schoolId, sessionId) {
             session_name:  session_name.trim(),
             session_start,
             session_end,
-            is_active,
-          });
+            is_active:     false,
+          })
+          .select('id')
+          .single();
 
-        if (error) throw new Error(error.message);
+        if (insertError) throw new Error(insertError.message);
+
+        if (is_active) {
+          const { error: rpcError } = await supabase.rpc('activate_session', {
+            p_session_id: inserted.id,
+          });
+          if (rpcError) throw new Error(rpcError.message);
+        }
 
       } else {
         // ── Update ────────────────────────────────────────────────────────────
-        // If activating this session: deactivate any other active session for the branch
-        if (is_active && !session?.is_active) {
-          await supabase
-            .from('sessions')
-            .update({ is_active: false, updated_at: new Date().toISOString() })
-            .eq('branch_id', session.branch_id)
-            .eq('is_active', true)
-            .neq('id', sessionId);
-        }
-
         const { error } = await supabase
           .from('sessions')
           .update({
@@ -83,11 +74,18 @@ export function useSessionForm(branchId, schoolId, sessionId) {
             session_start,
             session_end,
             is_active,
-            updated_at: new Date().toISOString(),
           })
           .eq('id', sessionId);
 
         if (error) throw new Error(error.message);
+
+        // If toggling to active, atomically deactivate sibling sessions via RPC
+        if (is_active && !session?.is_active) {
+          const { error: rpcError } = await supabase.rpc('activate_session', {
+            p_session_id: sessionId,
+          });
+          if (rpcError) throw new Error(rpcError.message);
+        }
       }
 
       invalidateSessionCache(branchId);

@@ -112,7 +112,7 @@ function SessionForm({ session, branchId, schoolId, onClose, onSaved }) {
     if (!name.trim() || name.trim().length < 2) { setNameErr('At least 2 characters required.'); ok = false; }
     if (!start) { setStartErr('Start date is required.'); ok = false; }
     if (!end)   { setEndErr('End date is required.'); ok = false; }
-    else if (start && end <= start) { setEndErr('End date must be after start date.'); ok = false; }
+    else if (start && end < start) { setEndErr('End date must be after or equal to start date.'); ok = false; }
     return ok;
   }
 

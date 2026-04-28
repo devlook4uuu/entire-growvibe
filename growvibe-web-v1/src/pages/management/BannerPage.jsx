@@ -517,6 +517,12 @@ function BannerForm({ banner, profile, onSave, onClose }) {
     if (!bgImagePath) { setError('Please upload a banner image.'); return; }
     if (showText && !title.trim()) { setError('Title is required for this banner type.'); return; }
     if (showCta && !ctaLabel.trim()) { setError('CTA button label is required.'); return; }
+    if (showCta && ctaType === 'url') {
+      const trimmed = ctaUrl.trim();
+      if (!trimmed) { setError('CTA URL is required when link type is URL.'); return; }
+      if (!/^https?:\/\/.+/.test(trimmed)) { setError('CTA URL must start with http:// or https://'); return; }
+    }
+    if (endDate && endDate <= startDate) { setError('End date must be after start date.'); return; }
     const opac = parseFloat(overlayOpacity);
     if (isNaN(opac) || opac < 0 || opac > 1) { setError('Overlay opacity must be 0–1 (e.g. 0.4).'); return; }
 

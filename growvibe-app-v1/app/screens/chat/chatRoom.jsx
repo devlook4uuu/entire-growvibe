@@ -15,8 +15,8 @@
  *  - Smooth pagination (prepend older messages without jerk)
  */
 
-import {
-  useCallback, useEffect, useRef, useState,
+import React, {
+  useCallback, useEffect, useMemo, useRef, useState,
 } from 'react';
 import {
   ActivityIndicator,
@@ -54,6 +54,7 @@ import {
 } from 'expo-audio';
 
 import { supabase } from '../../../lib/supabase';
+import { sendPush } from '../../../lib/notifications';
 import { Colors } from '../../../constant/colors';
 import { Fonts } from '../../../constant/fonts';
 import { hp, wp } from '../../../helpers/dimension';
@@ -136,38 +137,34 @@ function InlineReplyQuote({ message, senderName, isMine }) {
   );
 }
 
-// ─── ReactionSummary (below bubble, horizontal scroll) ───────────────────────
-// onChipPress(emoji, list, isMine) — if isMine: toggle/remove; else: show who reacted
-function ReactionSummary({ reactions, myId, isMine, onChipPress }) {
+// ─── ReactionSummary — WhatsApp-style combined badge ─────────────────────────
+// One badge showing up to 3 emoji + total count. Tap → full reactor list sheet.
+function ReactionSummary({ reactions, myId, isMine, onBadgePress }) {
   if (!reactions || reactions.length === 0) return null;
+
   const groups = {};
   reactions.forEach((r) => {
     if (!groups[r.emoji]) groups[r.emoji] = [];
     groups[r.emoji].push(r);
   });
-  const sorted = Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
+
+  const totalCount = reactions.length;
+  const iReacted   = reactions.some((r) => r.profile_id === myId);
+  // Show up to 3 most-used emoji
+  const topEmojis  = Object.entries(groups)
+    .sort((a, b) => b[1].length - a[1].length)
+    .slice(0, 3)
+    .map(([e]) => e);
+
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={[S.reactionsScroll, isMine && { alignSelf: 'flex-end' }]}
-      contentContainerStyle={S.reactionsScrollContent}
+    <TouchableOpacity
+      style={[S.reactionBadge, iReacted && S.reactionBadgeMine, isMine && { alignSelf: 'flex-end' }]}
+      onPress={() => onBadgePress(reactions)}
+      activeOpacity={0.75}
     >
-      {sorted.map(([emoji, list]) => {
-        const iReacted = list.some((r) => r.profile_id === myId);
-        return (
-          <TouchableOpacity
-            key={emoji}
-            style={[S.reactionChip, iReacted && S.reactionChipMine]}
-            onPress={() => onChipPress(emoji, list, iReacted)}
-            activeOpacity={0.75}
-          >
-            <Text style={S.reactionEmoji}>{emoji}</Text>
-            <Text style={[S.reactionCount, iReacted && { color: Colors.primary }]}>{list.length}</Text>
-          </TouchableOpacity>
-        );
-      })}
-    </ScrollView>
+      <Text style={S.reactionEmoji}>{topEmojis.join('')}</Text>
+      <Text style={[S.reactionCount, iReacted && { color: Colors.primary }]}>{totalCount}</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -249,19 +246,33 @@ function VoicePlayer({ bucket, path, duration, isMine }) {
 }
 
 // ─── MessageBubble ────────────────────────────────────────────────────────────
+// Receives pre-resolved sender + replySenderName so React.memo can shallow-compare
 function MessageBubble({
-  item, myId, members, onLongPress, onReactionTap, onReact, onImagePress,
+  item, myId, sender, replySenderName, onLongPress, onBadgePress, onImagePress,
 }) {
-  const isMine  = item.sender_id === myId;
-  const sender  = members[item.sender_id];
+  const isMine   = item.sender_id === myId;
   const replyMsg = item.reply_msg;
-  const replySenderName = replyMsg ? (members[replyMsg.sender_id]?.name || 'Unknown') : '';
 
   if (item.is_deleted) {
     return (
       <View style={[S.bubbleRow, isMine ? S.bubbleRowRight : S.bubbleRowLeft]}>
-        <View style={[S.bubble, S.bubbleDeleted]}>
-          <Text style={S.deletedText}>🚫 This message was deleted</Text>
+        {!isMine && (
+          <CachedAvatar
+            name={sender?.name}
+            avatarUrl={sender?.avatar_url}
+            size={hp(3.8)}
+            style={{ alignSelf: 'flex-end', marginBottom: hp(0.4) }}
+          />
+        )}
+        <View style={{ maxWidth: '75%' }}>
+          {!isMine && sender?.name && (
+            <Text style={S.senderName}>{sender.name}</Text>
+          )}
+          <View style={[S.bubble, S.bubbleDeleted]}>
+            <Text style={S.deletedText}>
+              {isMine ? 'You deleted this message' : 'This message was deleted'}
+            </Text>
+          </View>
         </View>
       </View>
     );
@@ -347,25 +358,18 @@ function MessageBubble({
           </View>
         </Pressable>
 
-        {/* Reactions — horizontal scroll, shown below bubble */}
+        {/* Reactions — combined WhatsApp-style badge */}
         <ReactionSummary
           reactions={item.reactions}
           myId={myId}
           isMine={isMine}
-          onChipPress={(emoji, list, iReacted) => {
-            if (iReacted) {
-              // Own chip: toggle/remove the reaction
-              onReact(item, emoji);
-            } else {
-              // Others' chip: show who reacted
-              onReactionTap(emoji, list);
-            }
-          }}
+          onBadgePress={(allReactions) => onBadgePress(allReactions)}
         />
       </View>
     </View>
   );
 }
+const MessageBubbleMemo = React.memo(MessageBubble);
 
 // ─── DateDivider ──────────────────────────────────────────────────────────────
 function DateDivider({ date }) {
@@ -437,20 +441,21 @@ function ContextMenu({ visible, message, myId, canSend, onClose, onCopy, onEdit,
   );
 }
 
-// ─── Reaction Detail Modal (who reacted) ─────────────────────────────────────
-function ReactionDetailModal({ visible, emoji, reactors, members, onClose }) {
+// ─── Reaction Detail Modal (full list: emoji + name) ─────────────────────────
+function ReactionDetailModal({ visible, reactors, members, onClose }) {
   if (!visible) return null;
   return (
     <Modal transparent animationType="slide" visible={visible} onRequestClose={onClose}>
       <Pressable style={S.ctxOverlay} onPress={onClose}>
         <View style={S.reactionDetailSheet}>
           <View style={S.reactionDetailHandle} />
-          <Text style={S.reactionDetailTitle}>{emoji} Reactions</Text>
+          <Text style={S.reactionDetailTitle}>Reactions</Text>
           <ScrollView>
             {(reactors || []).map((r) => {
               const m = members[r.profile_id];
               return (
                 <View key={r.id} style={S.reactionDetailRow}>
+                  <Text style={{ fontSize: hp(2.4) }}>{r.emoji}</Text>
                   <CachedAvatar name={m?.name} avatarUrl={m?.avatar_url} size={hp(4)} />
                   <Text style={S.reactionDetailName}>{m?.name || 'Unknown'}</Text>
                 </View>
@@ -612,28 +617,6 @@ function RecordingBar({ duration, onStop, onCancel }) {
   );
 }
 
-// ─── TypingDots ───────────────────────────────────────────────────────────────
-function TypingDots() {
-  const [frame, setFrame] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setFrame((f) => (f + 1) % 3), 400);
-    return () => clearInterval(t);
-  }, []);
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginRight: 5 }}>
-      {[0, 1, 2].map((i) => (
-        <View
-          key={i}
-          style={{
-            width: 5, height: 5, borderRadius: 3,
-            backgroundColor: frame === i ? Colors.primary : Colors.muted,
-          }}
-        />
-      ))}
-    </View>
-  );
-}
-
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function ChatRoom() {
   const router  = useRouter();
@@ -642,24 +625,28 @@ export default function ChatRoom() {
   const { chatId, chatName, chatImageUrl: chatImageUrlParam, canSend: canSendParam } = useLocalSearchParams();
 
   const myId    = profile?.id;
-  const canSend = canSendParam === 'true';
 
-  // Group image + real member count — re-fetch on every focus
+  // Group image + real member count + live can_send_message — re-fetch on every focus
   const [groupImageUri,  setGroupImageUri]  = useState(null);
-  const [memberCount,    setMemberCount]    = useState(null); // null = not loaded yet
+  const [memberCount,    setMemberCount]    = useState(null);
+  // canSend starts from route param but is refreshed from DB on every focus
+  const [canSend, setCanSend] = useState(canSendParam === 'true');
 
   useFocusEffect(useCallback(() => {
     if (!chatId) return;
     let cancelled = false;
 
-    // Fetch image_url + member count in parallel
+    // Fetch image_url, member count, and own can_send_message in parallel
     Promise.all([
       supabase.from('chats').select('image_url').eq('id', chatId).maybeSingle(),
       supabase.from('chat_members').select('profile_id', { count: 'exact', head: true }).eq('chat_id', chatId),
-    ]).then(async ([chatRes, countRes]) => {
+      supabase.from('chat_members').select('can_send_message').eq('chat_id', chatId).eq('profile_id', myId).maybeSingle(),
+    ]).then(async ([chatRes, countRes, memberRes]) => {
       if (cancelled) return;
       // Member count
       if (countRes.count != null) setMemberCount(countRes.count);
+      // Live send permission
+      if (memberRes.data != null) setCanSend(memberRes.data.can_send_message);
       // Group image
       const path = chatRes.data?.image_url || chatImageUrlParam || '';
       if (!path) { setGroupImageUri(null); return; }
@@ -668,7 +655,7 @@ export default function ChatRoom() {
     });
 
     return () => { cancelled = true; };
-  }, [chatId, chatImageUrlParam]));
+  }, [chatId, chatImageUrlParam, myId]));
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [messages,    setMessages]    = useState([]);
@@ -683,10 +670,9 @@ export default function ChatRoom() {
   const [ctxMsg,      setCtxMsg]      = useState(null);  // long-press context target
   const [ctxVisible,  setCtxVisible]  = useState(false);
   const [previewMsg,  setPreviewMsg]  = useState(null);
-  const [reactionDetail, setReactionDetail] = useState(null); // { emoji, reactors }
+  const [reactionDetail, setReactionDetail] = useState(null); // all reactions array for the tapped message
   const [uploading,        setUploading]        = useState(false);
   const [pendingAttachment, setPendingAttachment] = useState(null); // { uri, type, fileName, mimeType, fileSize, previewUri }
-  const [typingNames,      setTypingNames]       = useState([]);  // names of others currently typing
 
   // Voice recording
   const recorder   = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -765,16 +751,8 @@ export default function ChatRoom() {
 
   // ── Supabase Realtime ─────────────────────────────────────────────────────
   useEffect(() => {
-    const presenceKey = myId ?? 'anon';
     const channel = supabase
-      .channel(`chat:${chatId}`, { config: { presence: { key: presenceKey } } })
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState();
-        const names = Object.entries(state)
-          .filter(([id, list]) => id !== presenceKey && list?.[0]?.typing === true)
-          .map(([, list]) => list[0].name || 'Someone');
-        setTypingNames(names);
-      })
+      .channel(`chat:${chatId}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `chat_id=eq.${chatId}` },
@@ -862,12 +840,18 @@ export default function ChatRoom() {
           }));
         }
       )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          // Track own presence once subscribed so others can see us
-          channel.track({ typing: false, name: profile?.name ?? 'Someone' });
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'chat_members',
+          filter: `chat_id=eq.${chatId}` },
+        (payload) => {
+          // If our own send permission changed, update canSend in real-time
+          if (payload.new?.profile_id === myId) {
+            setCanSend(payload.new.can_send_message);
+          }
         }
-      });
+      )
+      .subscribe();
 
     channelRef.current = channel;
     return () => {
@@ -979,6 +963,23 @@ export default function ChatRoom() {
     } else if (inserted) {
       // Replace temp message with real ID so Realtime dedup works
       setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, id: inserted.id } : m));
+      // Notify other chat members who may be offline (fire-and-forget)
+      supabase
+        .from('chat_members')
+        .select('profile_id')
+        .eq('chat_id', chatId)
+        .neq('profile_id', myId)
+        .then(({ data: memberRows }) => {
+          if (!memberRows || memberRows.length === 0) return;
+          const recipientIds = memberRows.map((r) => r.profile_id);
+          const senderName = profile?.name || 'Someone';
+          sendPush(
+            recipientIds,
+            chatName || 'New message',
+            `${senderName}: ${trimmed.slice(0, 50)}${trimmed.length > 50 ? '…' : ''}`,
+            { type: 'chat_message', chatId },
+          );
+        });
     }
     setSending(false);
   }
@@ -989,7 +990,9 @@ export default function ChatRoom() {
     try {
       const bucket   = type === 'image' ? 'chat-images' : 'chat-documents';
       const ext      = fileName?.split('.').pop() || (type === 'image' ? 'jpg' : 'bin');
-      const path     = `${profile.school_id}/${chatId}/${Date.now()}.${ext}`;
+      const safeSchoolId = (profile.school_id || '').replace(/[^a-zA-Z0-9\-_]/g, '');
+      const safeChatId   = (chatId || '').replace(/[^a-zA-Z0-9\-_]/g, '');
+      const path     = `${safeSchoolId}/${safeChatId}/${Date.now()}.${ext}`;
       const base64   = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
       const arrayBuf = decodeBase64(base64);
 
@@ -1024,6 +1027,24 @@ export default function ChatRoom() {
             created_at: new Date().toISOString(),
           }, ...prev];
         });
+        // Notify other chat members (fire-and-forget)
+        supabase
+          .from('chat_members')
+          .select('profile_id')
+          .eq('chat_id', chatId)
+          .neq('profile_id', myId)
+          .then(({ data: memberRows }) => {
+            if (!memberRows || memberRows.length === 0) return;
+            const recipientIds = memberRows.map((r) => r.profile_id);
+            const senderName   = profile?.name || 'Someone';
+            const preview      = type === 'image' ? 'Image' : type === 'document' ? (fileName || 'Document') : 'Voice message';
+            sendPush(
+              recipientIds,
+              chatName || 'New message',
+              `${senderName}: ${preview}`.slice(0, 50),
+              { type: 'chat_message', chatId },
+            );
+          });
       }
       setReplyTo(null);
     } finally {
@@ -1082,7 +1103,6 @@ export default function ChatRoom() {
     try {
       const { granted } = await requestRecordingPermissionsAsync();
       if (!granted) { Alert.alert('Permission denied', 'Microphone access is required.'); return; }
-      // Must set audio mode immediately before each recording on iOS
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await recorder.prepareToRecordAsync();
       recorder.record();
@@ -1098,7 +1118,6 @@ export default function ChatRoom() {
     if (!isRecording) return;
     clearInterval(recTimer.current);
     await recorder.stop();
-    // Reset audio mode so playback works normally after recording
     await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
     const uri        = recorder.uri;
     const durationMs = recDuration;
@@ -1108,18 +1127,51 @@ export default function ChatRoom() {
     if (!uri) return;
     setUploading(true);
     try {
-      const path     = `${profile.school_id}/${chatId}/${Date.now()}.m4a`;
+      const safeSchoolIdV = (profile.school_id || '').replace(/[^a-zA-Z0-9\-_]/g, '');
+      const safeChatIdV   = (chatId || '').replace(/[^a-zA-Z0-9\-_]/g, '');
+      const path     = `${safeSchoolIdV}/${safeChatIdV}/${Date.now()}.m4a`;
       const base64   = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
       const arrayBuf = decodeBase64(base64);
       const { error: upErr } = await supabase.storage.from('chat-voice').upload(path, arrayBuf, {
         contentType: 'audio/m4a', upsert: false,
       });
       if (upErr) { Alert.alert('Upload failed', upErr.message); return; }
-      await supabase.from('chat_messages').insert({
+      const { data: voiceInserted } = await supabase.from('chat_messages').insert({
         chat_id: chatId, school_id: profile.school_id, sender_id: myId,
         type: 'voice', content: path, duration_ms: durationMs,
         reply_to_id: replyTo?.id ?? null,
-      });
+      }).select('id').single();
+      // Optimistic append — show immediately without waiting for Realtime
+      if (voiceInserted) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === voiceInserted.id)) return prev;
+          return [{
+            id: voiceInserted.id, chat_id: chatId, school_id: profile.school_id,
+            sender_id: myId, type: 'voice', content: path,
+            duration_ms: durationMs,
+            reply_to_id: replyTo?.id ?? null, reply_msg: replyTo ?? null,
+            reactions: [], is_edited: false, is_deleted: false,
+            created_at: new Date().toISOString(),
+          }, ...prev];
+        });
+      }
+      // Notify other chat members (fire-and-forget)
+      supabase
+        .from('chat_members')
+        .select('profile_id')
+        .eq('chat_id', chatId)
+        .neq('profile_id', myId)
+        .then(({ data: memberRows }) => {
+          if (!memberRows || memberRows.length === 0) return;
+          const recipientIds = memberRows.map((r) => r.profile_id);
+          const senderName   = profile?.name || 'Someone';
+          sendPush(
+            recipientIds,
+            chatName || 'New message',
+            `${senderName}: Voice message`.slice(0, 50),
+            { type: 'chat_message', chatId },
+          );
+        });
       setReplyTo(null);
     } finally {
       setUploading(false);
@@ -1127,9 +1179,8 @@ export default function ChatRoom() {
   }
 
   async function cancelRecording() {
-    if (isRecording) { recorder.stop(); }
     clearInterval(recTimer.current);
-    // Reset audio mode on cancel too
+    if (isRecording) { await recorder.stop().catch(() => {}); }
     await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
     setIsRecording(false);
     setRecDuration(0);
@@ -1161,24 +1212,6 @@ export default function ChatRoom() {
     Clipboard.setStringAsync(message.content || '');
   }
 
-  // ── Typing indicator ──────────────────────────────────────────────────────
-  const typingTimerRef = useRef(null);
-
-  function handleTextChange(val) {
-    setText(val);
-    if (!val.trim()) return;
-    // Broadcast typing via Realtime presence
-    channelRef.current?.track({ typing: true, name: profile?.name || 'Someone' });
-    clearTimeout(typingTimerRef.current);
-    typingTimerRef.current = setTimeout(() => {
-      channelRef.current?.track({ typing: false });
-    }, 2000);
-  }
-
-  function stopTyping() {
-    clearTimeout(typingTimerRef.current);
-    channelRef.current?.track({ typing: false });
-  }
 
   function handleEdit(message) {
     setEditMsg(message);
@@ -1195,14 +1228,25 @@ export default function ChatRoom() {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === message.id
-                ? { ...m, is_deleted: true, content: null }
+                ? { ...m, is_deleted: true, content: '' }
                 : m
             )
           );
-          await supabase
+          const { error: delErr } = await supabase
             .from('chat_messages')
-            .update({ is_deleted: true, content: null })
+            .update({ is_deleted: true, content: '' })
             .eq('id', message.id);
+          if (delErr) {
+            // Rollback optimistic update
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === message.id
+                  ? { ...m, is_deleted: false, content: message.content }
+                  : m
+              )
+            );
+            Alert.alert('Delete failed', delErr.message);
+          }
         },
       },
     ]);
@@ -1210,39 +1254,72 @@ export default function ChatRoom() {
 
   // ── Build flat list data with date dividers ───────────────────────────────
   // Messages are newest-first; inverted FlatList renders index-0 at the bottom.
-  // Date dividers appear AFTER the last message of each day in array order
-  // so they render ABOVE that group visually (inverted).
+  // We collect unique date strings first, then insert one divider per day
+  // (after the oldest message of that day in array order = renders above group).
   const listData = (() => {
     const result = [];
-    let lastDate = null;
-    messages.forEach((m) => {
+    // First pass: find the index of the last (oldest) message per date group
+    const lastIndexForDate = {};
+    messages.forEach((m, i) => {
       const d = new Date(m.created_at).toDateString();
-      result.push({ ...m, _type: 'msg' });
-      if (d !== lastDate) {
+      lastIndexForDate[d] = i; // keeps overwriting — ends up with highest index (oldest)
+    });
+    messages.forEach((m, i) => {
+      const d = new Date(m.created_at).toDateString();
+      result.push({ ...m, _type: 'msg', key: m.id });
+      if (lastIndexForDate[d] === i) {
         result.push({ _type: 'date', key: `date-${d}`, date: m.created_at });
-        lastDate = d;
       }
     });
     return result;
   })();
 
   // ── Render item ───────────────────────────────────────────────────────────
-  function renderItem({ item }) {
+  // Fetch any reactor profiles not yet in the members map, then open the sheet
+  const openReactionDetail = useCallback(async (allReactions) => {
+    const missingIds = allReactions
+      .map((r) => r.profile_id)
+      .filter((id) => id && !membersRef.current[id]);
+    if (missingIds.length > 0) {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, name, avatar_url')
+        .in('id', missingIds);
+      if (data && data.length > 0) {
+        setMembers((prev) => {
+          const next = { ...prev };
+          data.forEach((p) => { next[p.id] = p; });
+          return next;
+        });
+      }
+    }
+    setReactionDetail(allReactions);
+  }, []);
+
+  // Stable callbacks — defined once, never re-created
+  const onLongPressStable  = useCallback((msg) => { setCtxMsg(msg); setCtxVisible(true); }, []);
+  const onImagePressStable = useCallback((msg) => setPreviewMsg(msg), []);
+
+  // renderItem reads membersRef.current so it never needs members in its deps
+  const renderItem = useCallback(({ item }) => {
     if (item._type === 'date') {
       return <DateDivider date={item.date} />;
     }
+    const m   = membersRef.current;
+    const sender          = m[item.sender_id];
+    const replySenderName = item.reply_msg ? (m[item.reply_msg.sender_id]?.name || '') : '';
     return (
-      <MessageBubble
+      <MessageBubbleMemo
         item={item}
         myId={myId}
-        members={members}
-        onLongPress={(msg) => { setCtxMsg(msg); setCtxVisible(true); }}
-        onReact={handleReact}
-        onReactionTap={(emoji, list) => setReactionDetail({ emoji, reactors: list })}
-        onImagePress={(msg) => setPreviewMsg(msg)}
+        sender={sender}
+        replySenderName={replySenderName}
+        onLongPress={onLongPressStable}
+        onBadgePress={openReactionDetail}
+        onImagePress={onImagePressStable}
       />
     );
-  }
+  }, [myId, onLongPressStable, onImagePressStable]);
 
   // ── UI ────────────────────────────────────────────────────────────────────
   return (
@@ -1334,19 +1411,6 @@ export default function ChatRoom() {
             />
           ) : (
             <>
-              {/* Typing indicator — visible to everyone */}
-              {typingNames.length > 0 && (
-                <View style={S.typingRow}>
-                  <TypingDots />
-                  <Text style={S.typingText} numberOfLines={1}>
-                    {typingNames.length === 1
-                      ? `${typingNames[0]} is typing…`
-                      : typingNames.length === 2
-                      ? `${typingNames[0]} and ${typingNames[1]} are typing…`
-                      : 'Several people are typing…'}
-                  </Text>
-                </View>
-              )}
 
               {canSend && (
                 <>
@@ -1392,8 +1456,7 @@ export default function ChatRoom() {
                       placeholder={editMsg ? 'Edit message…' : 'Message…'}
                       placeholderTextColor={Colors.muted}
                       value={text}
-                      onChangeText={handleTextChange}
-                      onBlur={stopTyping}
+                      onChangeText={setText}
                       multiline
                       maxLength={4000}
                     />
@@ -1449,8 +1512,7 @@ export default function ChatRoom() {
       {/* Reaction detail */}
       <ReactionDetailModal
         visible={!!reactionDetail}
-        emoji={reactionDetail?.emoji}
-        reactors={reactionDetail?.reactors}
+        reactors={reactionDetail}
         members={members}
         onClose={() => setReactionDetail(null)}
       />
@@ -1543,16 +1605,14 @@ const S = StyleSheet.create({
   voiceProgress: { height: 4, borderRadius: 2 },
   voiceDuration: { fontSize: hp(1.3), fontFamily: Fonts.medium, color: Colors.muted, minWidth: 36 },
 
-  // Reactions
-  reactionsScroll: { marginTop: 4, marginHorizontal: 4, maxHeight: hp(4.5), flexShrink: 1 },
-  reactionsScrollContent: { flexDirection: 'row', gap: 4, paddingRight: 4 },
-  reactionChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
+  // Reactions — combined WhatsApp-style badge
+  reactionBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start',
     backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.borderLight,
-    borderRadius: 20, paddingHorizontal: 7, paddingVertical: 3,
+    borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4, marginTop: 4,
   },
-  reactionChipMine: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight },
-  reactionEmoji: { fontSize: hp(1.6) },
+  reactionBadgeMine: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight },
+  reactionEmoji: { fontSize: hp(1.7) },
   reactionCount: { fontSize: hp(1.3), fontFamily: Fonts.semiBold, color: Colors.soft },
 
 
@@ -1560,15 +1620,6 @@ const S = StyleSheet.create({
   dateDivider:     { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: hp(1.5) },
   dateDividerLine: { flex: 1, height: 1, backgroundColor: Colors.borderLight },
   dateDividerText: { fontSize: hp(1.3), fontFamily: Fonts.medium, color: Colors.muted },
-
-  // Typing indicator
-  typingRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: wp(4), paddingTop: hp(0.6), paddingBottom: 0,
-  },
-  typingText: {
-    fontSize: hp(1.45), fontFamily: Fonts.regular, color: Colors.muted, flex: 1,
-  },
 
   // Input area
   inputArea: {

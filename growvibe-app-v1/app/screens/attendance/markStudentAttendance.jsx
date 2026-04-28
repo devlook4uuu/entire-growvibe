@@ -16,6 +16,7 @@
 
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   StyleSheet,
   Text,
@@ -152,7 +153,7 @@ export default function MarkStudentAttendance() {
     setLocalStatuses({});
   }
 
-  async function handleSubmit() {
+  function handleSubmit() {
     // Merge: start with existing records, overlay localStatuses
     const records = students.map((s) => {
       const status = localStatuses[s.id] ?? s.attendance?.status;
@@ -161,12 +162,24 @@ export default function MarkStudentAttendance() {
 
     if (records.length === 0) return;
 
-    try {
-      await submitAttendance({ schoolId, branchId: branchId ?? '', records });
-      setLocalStatuses({});
-    } catch (e) {
-      // error surfaced by hook — could add toast here
-    }
+    Alert.alert(
+      'Save Attendance',
+      `Submit attendance for ${records.length} student${records.length !== 1 ? 's' : ''}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Save',
+          onPress: async () => {
+            try {
+              await submitAttendance({ schoolId, branchId: branchId ?? '', records });
+              setLocalStatuses({});
+            } catch (e) {
+              // error surfaced by hook
+            }
+          },
+        },
+      ]
+    );
   }
 
   const hasChanges = Object.keys(localStatuses).length > 0;

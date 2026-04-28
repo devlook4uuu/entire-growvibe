@@ -82,7 +82,7 @@ export default function StudentFormScreen() {
       setFetching(true);
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, name, email, avatar_url, is_active, created_at, branch_id, school_id, class_id, student_fee')
+        .select('id, name, email, avatar_url, is_active, created_at, branch_id, school_id, class_id, student_fee, biometric_id')
         .eq('id', studentId)
         .single();
 
@@ -101,18 +101,24 @@ export default function StudentFormScreen() {
   // ── Create handler ─────────────────────────────────────────────────────────
   async function handleCreate(values, { setSubmitting }) {
     setSaveError('');
+    if (!branchId || !schoolId) {
+      setSaveError('Branch or school not found. Please go back and try again.');
+      setSubmitting(false);
+      return;
+    }
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const response = await supabase.functions.invoke('create-user', {
         body: {
-          name:        values.name.trim(),
-          email:       values.email.trim(),
-          password:    values.password,
-          role:        'student',
-          school_id:   schoolId,
-          branch_id:   branchId,
-          class_id:    classId,
-          student_fee: Number(values.student_fee),
+          name:         values.name.trim(),
+          email:        values.email.trim(),
+          password:     values.password,
+          role:         'student',
+          school_id:    schoolId,
+          branch_id:    branchId,
+          class_id:     classId,
+          student_fee:  Number(values.student_fee),
+          biometric_id: values.biometric_id.trim() || null,
         },
         headers: { Authorization: `Bearer ${session?.access_token}` },
       });
@@ -134,11 +140,12 @@ export default function StudentFormScreen() {
     setSaveError('');
     try {
       const body = {
-        user_id:     student.id,
-        name:        values.name.trim(),
-        email:       values.email.trim(),
-        is_active:   isActive,
-        student_fee: Number(values.student_fee),
+        user_id:      student.id,
+        name:         values.name.trim(),
+        email:        values.email.trim(),
+        is_active:    isActive,
+        student_fee:  Number(values.student_fee),
+        biometric_id: values.biometric_id.trim() || null,
       };
       if (values.password) body.password = values.password;
 
@@ -235,10 +242,11 @@ export default function StudentFormScreen() {
 
           <Formik
             initialValues={{
-              name:        student?.name        || '',
-              email:       student?.email       || '',
-              password:    '',
-              student_fee: student?.student_fee != null ? String(student.student_fee) : '0',
+              name:         student?.name         || '',
+              email:        student?.email        || '',
+              password:     '',
+              student_fee:  student?.student_fee  != null ? String(student.student_fee) : '0',
+              biometric_id: student?.biometric_id || '',
             }}
             validationSchema={isEdit ? EditSchema : CreateSchema}
             onSubmit={isEdit ? handleEdit : handleCreate}
@@ -285,6 +293,19 @@ export default function StudentFormScreen() {
                     onBlur={handleBlur('student_fee')}
                     error={touched.student_fee && errors.student_fee}
                     keyboardType="numeric"
+                  />
+                </View>
+
+                <SectionLabel>Additional</SectionLabel>
+
+                <View style={S.fieldGroup}>
+                  <Text style={S.fieldLabel}>Biometric ID <Text style={S.fieldOptional}>(Optional)</Text></Text>
+                  <Input
+                    type="text"
+                    placeholder="Device biometric identifier"
+                    value={values.biometric_id}
+                    onChangeText={handleChange('biometric_id')}
+                    onBlur={handleBlur('biometric_id')}
                   />
                 </View>
 
@@ -419,7 +440,8 @@ const S = StyleSheet.create({
   },
   fieldGroup: { gap: hp(0.6) },
   fieldLabel: { fontSize: hp(1.5), fontFamily: Fonts.medium, color: Colors.soft, marginLeft: 2 },
-  fieldHint:  { fontSize: hp(1.3), fontFamily: Fonts.regular, color: Colors.muted, marginLeft: 2 },
+  fieldHint:     { fontSize: hp(1.3), fontFamily: Fonts.regular, color: Colors.muted, marginLeft: 2 },
+  fieldOptional: { fontSize: hp(1.4), fontFamily: Fonts.regular, color: Colors.muted },
 
   statusRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

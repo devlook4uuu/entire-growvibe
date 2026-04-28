@@ -28,7 +28,15 @@
       "Bash(sed -n '30,46p' /Users/mac/Public/personal-projects/growvibe-v1/growvibe-web-v1/src/pages/dashboard/CoordinatorDashboard.jsx)",
       "Bash(sed -n '4,6p' /Users/mac/Public/personal-projects/growvibe-v1/growvibe-web-v1/src/pages/dashboard/TeacherDashboard.jsx)",
       "Bash(grep -r \"isLoaded\\\\|isBuffering\\\\|status\\\\.\" /Users/mac/Public/personal-projects/growvibe-v1/growvibe-app-v1/node_modules/expo-audio/build/*.d.ts)",
-      "Bash(grep -rn \"image_url\\\\|avatar_url\" /Users/mac/Public/personal-projects/growvibe-v1/supabase/migrations/*chat*)"
+      "Bash(grep -rn \"image_url\\\\|avatar_url\" /Users/mac/Public/personal-projects/growvibe-v1/supabase/migrations/*chat*)",
+      "Bash(xargs ls:*)",
+      "mcp__claude_ai_Supabase__list_tables",
+      "mcp__claude_ai_Supabase__get_advisors",
+      "mcp__claude_ai_Supabase__get_project_url",
+      "mcp__claude_ai_Supabase__get_publishable_keys",
+      "Bash(grep -l \"grow_tasks\" /Users/mac/Public/personal-projects/growvibe-v1/supabase/migrations/*.sql)",
+      "Bash(grep -A 10 \"insert into.*grow_tasks\" /Users/mac/Public/personal-projects/growvibe-v1/supabase/migrations/*.sql)",
+      "WebFetch(domain:www.hostinger.com)"
     ]
   }
 }

@@ -98,7 +98,6 @@ export function useBranchForm(schoolId, branchId) {
             branch_contact:          branch_contact || null,
             branch_subscription_fee: Number(branch_subscription_fee) || 0,
             is_active,
-            updated_at: new Date().toISOString(),
           })
           .eq('id', branchId);
 

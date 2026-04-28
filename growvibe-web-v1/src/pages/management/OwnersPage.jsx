@@ -45,24 +45,26 @@ function SkeletonCard() {
 // ─── Owner form ───────────────────────────────────────────────────────────────
 function OwnerForm({ owner, onSave, onClose }) {
   const isEdit = !!owner;
-  const [name,     setName]     = useState(owner?.name  || '');
-  const [email,    setEmail]    = useState(owner?.email || '');
-  const [password, setPassword] = useState('');
-  const [isActive, setIsActive] = useState(owner?.is_active ?? true);
-  const [saving,   setSaving]   = useState(false);
-  const [error,    setError]    = useState('');
+  const [name,        setName]        = useState(owner?.name        || '');
+  const [email,       setEmail]       = useState(owner?.email       || '');
+  const [password,    setPassword]    = useState('');
+  const [biometricId, setBiometricId] = useState(owner?.biometric_id || '');
+  const [isActive,    setIsActive]    = useState(owner?.is_active ?? true);
+  const [saving,      setSaving]      = useState(false);
+  const [error,       setError]       = useState('');
 
   async function handleSubmit() {
     if (!name.trim())  return setError('Name is required.');
     if (!email.trim()) return setError('Email is required.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError('Enter a valid email address.');
     if (!isEdit && password.length < 6) return setError('Password must be at least 6 characters.');
     setError(''); setSaving(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const fnName = isEdit ? 'update-user' : 'create-user';
       const body   = isEdit
-        ? { user_id: owner.id, name: name.trim(), email: email.trim(), is_active: isActive, ...(password ? { password } : {}) }
-        : { name: name.trim(), email: email.trim(), password, role: 'owner' };
+        ? { user_id: owner.id, name: name.trim(), email: email.trim(), is_active: isActive, biometric_id: biometricId.trim() || null, ...(password ? { password } : {}) }
+        : { name: name.trim(), email: email.trim(), password, role: 'owner', biometric_id: biometricId.trim() || null };
       const res = await supabase.functions.invoke(fnName, { body, headers: { Authorization: `Bearer ${session?.access_token}` } });
       if (res.error || res.data?.error) throw new Error(res.error?.message || res.data?.error);
       onSave();
@@ -76,6 +78,9 @@ function OwnerForm({ owner, onSave, onClose }) {
       <FormError message={error} />
       <Field label="Full Name"><TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Owner's full name" /></Field>
       <Field label="Email Address"><TextInput value={email} onChange={(e) => setEmail(e.target.value)} placeholder="owner@example.com" type="email" /></Field>
+      <Field label="Biometric ID" optional>
+        <TextInput value={biometricId} onChange={(e) => setBiometricId(e.target.value)} placeholder="Device biometric identifier" />
+      </Field>
       <Field label={isEdit ? 'New Password' : 'Password'} optional={isEdit}>
         <TextInput value={password} onChange={(e) => setPassword(e.target.value)} placeholder={isEdit ? 'Leave blank to keep current' : 'Min. 6 characters'} type="password" />
       </Field>
@@ -141,7 +146,7 @@ export default function OwnersPage() {
     buildQuery: (supabase, _scope, query, from, to) => {
       let q = supabase
         .from('owners_with_school')
-        .select('id, name, email, avatar_url, is_active, created_at, school_id, school_name')
+        .select('id, name, email, avatar_url, is_active, created_at, school_id, school_name, biometric_id')
         .order('created_at', { ascending: false })
         .range(from, to);
       if (query.trim()) q = q.or(`name.ilike.%${query.trim()}%,email.ilike.%${query.trim()}%`);

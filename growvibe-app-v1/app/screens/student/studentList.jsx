@@ -100,12 +100,13 @@ export default function StudentListScreen() {
   const router = useRouter();
   const { classId, className, branchId, schoolId, sessionId, sessionName } = useLocalSearchParams();
   const { selectedSessionId } = useSelector((s) => s.app);
+  const profile = useSelector((s) => s.auth.profile);
 
   // Use param sessionId if provided, else fall back to Redux selected session
   const resolvedSessionId = sessionId || selectedSessionId || '';
 
   const { items, loading, loadingMore, refreshing, error, search, hasMore, setSearch, loadMore, refresh } =
-    useStudentList(classId);
+    useStudentList(classId, profile?.role);
 
   function handleEdit(student) {
     router.push({

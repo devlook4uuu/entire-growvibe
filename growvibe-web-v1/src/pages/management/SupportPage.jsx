@@ -14,6 +14,22 @@ import { supabase } from '../../lib/supabase';
 import Ticket  from '../../assets/icons/Ticket';
 import Send    from '../../assets/icons/Send';
 
+// ─── Fire-and-forget push helper (web) ───────────────────────────────────────
+async function sendPush(userIds, title, body) {
+  if (!userIds || userIds.length === 0) return;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return;
+  fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push`, {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+      'apikey':        import.meta.env.VITE_SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ userIds, title, body }),
+  }).catch(() => {});
+}
+
 // ── Module-level caches ───────────────────────────────────────────────────────
 const CACHE_TTL = 30_000;
 const ticketCache  = {}; // key: filter ('all'|'open'|'closed')
@@ -163,7 +179,7 @@ export default function SupportPage() {
     setLoading(true);
     const q = supabase
       .from('support_tickets')
-      .select('id, title, message, priority, status, created_at, school_id, profiles(name, role, avatar_url)')
+      .select('id, title, message, priority, status, created_at, school_id, created_by, profiles(name, role, avatar_url)')
       .order('created_at', { ascending: false });
     if (filter !== 'all') q.eq('status', filter);
     const { data } = await q;
@@ -220,6 +236,10 @@ export default function SupportPage() {
       });
       setReplyText('');
       setTimeout(() => repliesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+      // Notify ticket creator (fire-and-forget)
+      if (selected.created_by && selected.created_by !== uid) {
+        sendPush([selected.created_by], 'Support Ticket', 'Your support ticket has received a reply');
+      }
     }
   }
 
@@ -240,6 +260,9 @@ export default function SupportPage() {
         ticketCache[filter] = { items: next, ts: Date.now() };
         return next;
       });
+      if (selected.created_by && selected.created_by !== uid) {
+        sendPush([selected.created_by], 'Support Ticket', 'Your support ticket status has been updated');
+      }
     }
   }
 

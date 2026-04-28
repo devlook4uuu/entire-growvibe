@@ -21,6 +21,7 @@ import { Fonts } from '../../../constant/fonts';
 import { hp, wp } from '../../../helpers/dimension';
 import { ScreenWrapper } from '../../../helpers/screenWrapper';
 import { supabase } from '../../../lib/supabase';
+import { sendPush } from '../../../lib/notifications';
 
 // ─── Module-level reply cache keyed by ticketId ──────────────────────────────
 const REPLY_CACHE_TTL = 30_000;
@@ -85,12 +86,13 @@ export default function SupportTicketDetail() {
 
   const isAdmin = profile?.role === 'admin';
 
-  const [ticket,   setTicket]   = useState(null);
-  const [replies,  setReplies]  = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [text,     setText]     = useState('');
-  const [sending,  setSending]  = useState(false);
-  const [toggling, setToggling] = useState(false);
+  const [ticket,      setTicket]      = useState(null);
+  const [replies,     setReplies]     = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [text,        setText]        = useState('');
+  const [sending,     setSending]     = useState(false);
+  const [toggling,    setToggling]    = useState(false);
+  const [toggleError, setToggleError] = useState('');
 
   const load = useCallback(async () => {
     if (isReplyCacheFresh(ticketId)) {
@@ -139,24 +141,46 @@ export default function SupportTicketDetail() {
       });
       setText('');
       setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 100);
+      // Notify the ticket creator if the replier is someone else (e.g. admin)
+      if (ticket?.created_by && ticket.created_by !== profile.id) {
+        sendPush(
+          [ticket.created_by],
+          'Support Ticket',
+          `${profile?.name || 'Support'} replied: ${text.trim().length > 80 ? text.trim().slice(0, 80) + '…' : text.trim()}`,
+          { type: 'support_reply', ticketId },
+        );
+      }
     }
   }
 
   async function handleToggleStatus() {
     if (!ticket || toggling) return;
     setToggling(true);
+    setToggleError('');
     const newStatus = ticket.status === 'open' ? 'closed' : 'open';
     const { error } = await supabase
       .from('support_tickets')
       .update({ status: newStatus })
       .eq('id', ticketId);
     setToggling(false);
-    if (!error) {
+    if (error) {
+      setToggleError('Failed to update ticket status. Please try again.');
+    } else {
       setTicket((prev) => {
         const next = { ...prev, status: newStatus };
         writeReplyCache(ticketId, next, replyCache[ticketId]?.replies || []);
         return next;
       });
+      // Notify the ticket creator of the status change
+      if (ticket.created_by && ticket.created_by !== profile.id) {
+        const statusLabel = newStatus === 'closed' ? 'closed' : 'reopened';
+        sendPush(
+          [ticket.created_by],
+          'Support Ticket',
+          `Your support ticket "${title}" has been ${statusLabel}.`,
+          { type: 'support_status', ticketId, status: newStatus },
+        );
+      }
     }
   }
 
@@ -213,6 +237,13 @@ export default function SupportTicketDetail() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={hp(2)}
         >
+          {/* Toggle error banner */}
+          {!!toggleError && (
+            <View style={S.toggleErrorBanner}>
+              <Text style={S.toggleErrorText}>{toggleError}</Text>
+            </View>
+          )}
+
           {/* Ticket body */}
           <View style={S.ticketBody}>
             {/* Creator row */}
@@ -320,6 +351,16 @@ const S = StyleSheet.create({
   bubbleText:  { fontSize: hp(1.6), fontFamily: Fonts.regular, color: Colors.ink },
   bubbleTime:  { fontSize: hp(1.1), fontFamily: Fonts.regular, color: Colors.muted, marginHorizontal: 4 },
 
+  toggleErrorBanner: {
+    marginHorizontal: wp(4), marginTop: hp(1),
+    backgroundColor: Colors.dangerLight, borderRadius: 10,
+    paddingVertical: hp(1), paddingHorizontal: wp(4),
+    borderWidth: 1, borderColor: Colors.dangerBorder ?? Colors.danger,
+  },
+  toggleErrorText: {
+    fontSize: hp(1.4), fontFamily: Fonts.medium, color: Colors.dangerText ?? Colors.danger,
+    textAlign: 'center',
+  },
   closedBar: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: Colors.canvas, margin: wp(4), borderRadius: 10,

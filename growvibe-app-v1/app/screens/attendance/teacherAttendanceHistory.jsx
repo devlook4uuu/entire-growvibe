@@ -376,7 +376,7 @@ const S = StyleSheet.create({
   navBtn:     { padding: hp(0.6) },
   monthLabel: { fontSize: hp(1.9), fontFamily: Fonts.semiBold, color: Colors.ink, letterSpacing: -0.2 },
 
-  calWrap: { paddingHorizontal: wp(4) },
+  calWrap: { paddingHorizontal: wp(4), overflow: 'hidden' },
 
   legend: {
     flexDirection: 'row', flexWrap: 'wrap', gap: hp(0.8),
@@ -386,22 +386,22 @@ const S = StyleSheet.create({
   legendText: { fontSize: hp(1.3), fontFamily: Fonts.medium },
 });
 
-// Calendar cell styles
-const cellSize = (wp(100) - wp(8)) / 7;
+// Calendar cell styles — subtract 2px per cell to absorb today's 2px border
+const cellSize = Math.floor((wp(100) - wp(8)) / 7) - 2;
 const C = StyleSheet.create({
-  calGrid:   { flexDirection: 'row', flexWrap: 'wrap' },
+  calGrid:   { flexDirection: 'row', flexWrap: 'wrap', overflow: 'hidden' },
   dayHeader: {
-    width: cellSize, textAlign: 'center',
+    width: cellSize + 2, textAlign: 'center',
     fontSize: hp(1.3), fontFamily: Fonts.medium, color: Colors.muted,
     paddingVertical: hp(0.8),
   },
   dayCell: {
     width: cellSize, height: cellSize,
     alignItems: 'center', justifyContent: 'center',
-    borderRadius: 10, padding: 2,
+    borderRadius: 8, padding: 1, margin: 1,
   },
-  dayNum:    { fontSize: hp(1.55), fontFamily: Fonts.regular, color: Colors.ink },
-  dayStatus: { fontSize: hp(1.1),  fontFamily: Fonts.medium, marginTop: 1 },
+  dayNum:    { fontSize: hp(1.45), fontFamily: Fonts.regular, color: Colors.ink },
+  dayStatus: { fontSize: hp(1.0),  fontFamily: Fonts.medium, marginTop: 0 },
 });
 
 // Modal styles

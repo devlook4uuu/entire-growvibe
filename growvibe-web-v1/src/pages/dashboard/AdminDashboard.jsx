@@ -1,16 +1,10 @@
 import { useState, useEffect } from 'react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer,
-} from 'recharts';
-import School   from '../../assets/icons/School';
-import Users    from '../../assets/icons/Users';
-import Money    from '../../assets/icons/Money';
-import Store    from '../../assets/icons/Store';
-import Plus     from '../../assets/icons/Plus';
-import Calendar from '../../assets/icons/Calendar';
-import Order    from '../../assets/icons/Order';
-import { adminData } from '../../data/mockData';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
+import School  from '../../assets/icons/School';
+import Users   from '../../assets/icons/Users';
+import Ticket  from '../../assets/icons/Ticket';
+import Plus    from '../../assets/icons/Plus';
 import BannerCarousel from '../../components/shared/BannerCarousel';
 
 // ── Shared design tokens ───────────────────────────────────────
@@ -72,13 +66,14 @@ export function Card({ children, style }) {
   );
 }
 
-export function CardHeader({ title, action }) {
+export function CardHeader({ title, action, onAction }) {
   const [hov, setHov] = useState(false);
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
       <h3 style={{ fontSize: 13, fontWeight: 600, color: C.ink, margin: 0 }}>{title}</h3>
       {action && (
         <button
+          onClick={onAction}
           onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
           style={{
             fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer',
@@ -143,7 +138,7 @@ export function useBreakpoint() {
 }
 
 // ── Stat card ──────────────────────────────────────────────────
-export function StatCard({ icon: Icon, iconColor, iconBg, title, value, badge, badgeColor }) {
+export function StatCard({ icon: Icon, iconColor, iconBg, title, value, badge, badgeColor, loading }) {
   return (
     <Card style={{ display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -165,8 +160,17 @@ export function StatCard({ icon: Icon, iconColor, iconBg, title, value, badge, b
           </span>
         )}
       </div>
-      <p style={{ fontSize: 24, fontWeight: 700, color: C.ink, margin: 0 }}>{value}</p>
-      <p style={{ fontSize: 13, color: C.soft, marginTop: 2, marginBottom: 0 }}>{title}</p>
+      {loading ? (
+        <>
+          <div style={{ height: 28, width: '50%', borderRadius: 6, backgroundColor: C.borderLight, marginBottom: 6 }} />
+          <div style={{ height: 14, width: '70%', borderRadius: 6, backgroundColor: C.borderLight }} />
+        </>
+      ) : (
+        <>
+          <p style={{ fontSize: 24, fontWeight: 700, color: C.ink, margin: 0 }}>{value}</p>
+          <p style={{ fontSize: 13, color: C.soft, marginTop: 2, marginBottom: 0 }}>{title}</p>
+        </>
+      )}
     </Card>
   );
 }
@@ -228,236 +232,258 @@ export function PageHeader({ greeting, subtitle, actions }) {
   );
 }
 
-// ── Admin-specific row components ──────────────────────────────
-function OrderRow({ order, isMobile }) {
+// ── HoverRow helper ────────────────────────────────────────────
+function HoverRow({ children, style }) {
   const [hov, setHov] = useState(false);
-  if (isMobile) {
-    return (
-      <div
-        onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-        style={{ padding: '10px 8px', borderRadius: 8, backgroundColor: hov ? '#F8FAFC' : 'transparent', transition: 'background-color 0.15s', borderBottom: `1px solid ${C.borderLight}` }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
-          <span style={{ fontSize: 13, fontWeight: 500, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>{order.student}</span>
-          <Badge status={order.status} />
-        </div>
-        <span style={{ fontSize: 11, color: C.soft }}>{order.school} · {order.product} · {order.paymentType}</span>
-      </div>
-    );
-  }
   return (
     <div
       onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{
-        display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8,
-        alignItems: 'center', padding: '9px 8px', borderRadius: 8,
-        backgroundColor: hov ? '#F8FAFC' : 'transparent',
-        transition: 'background-color 0.15s', fontSize: 13,
-      }}
+      style={{ ...style, backgroundColor: hov ? '#F8FAFC' : 'transparent', transition: 'background-color 0.15s' }}
     >
-      <span style={{ fontWeight: 500, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{order.student}</span>
-      <span style={{ color: C.soft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{order.school}</span>
-      <span style={{ color: C.soft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{order.product}</span>
-      <span style={{ color: C.soft }}>{order.paymentType}</span>
-      <Badge status={order.status} />
-    </div>
-  );
-}
-
-function TicketRow({ ticket }) {
-  const [hov, setHov] = useState(false);
-  return (
-    <li
-      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-        borderRadius: 8, padding: '9px 10px', listStyle: 'none',
-        backgroundColor: hov ? '#F8FAFC' : 'transparent', transition: 'background-color 0.15s',
-      }}
-    >
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <p style={{ fontSize: 13, fontWeight: 500, color: C.ink, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ticket.subject}</p>
-        <p style={{ fontSize: 11, color: C.muted, margin: '2px 0 0' }}>{ticket.school} · {ticket.timeAgo}</p>
-      </div>
-      <Badge status={ticket.status} />
-    </li>
-  );
-}
-
-function SchoolRow({ school, last, isMobile }) {
-  const [hov, setHov] = useState(false);
-  if (isMobile) {
-    return (
-      <div
-        onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-        style={{ padding: '10px 8px', borderBottom: last ? 'none' : `1px solid ${C.borderLight}`, backgroundColor: hov ? '#F8FAFC' : 'transparent', transition: 'background-color 0.15s' }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
-          <span style={{ fontSize: 13, fontWeight: 500, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>{school.name}</span>
-          <Badge status={school.status} />
-        </div>
-        <span style={{ fontSize: 11, color: C.soft }}>{school.city} · {school.students.toLocaleString()} students</span>
-      </div>
-    );
-  }
-  return (
-    <div
-      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{
-        display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 8,
-        alignItems: 'center', padding: '9px 8px',
-        borderBottom: last ? 'none' : `1px solid ${C.borderLight}`,
-        backgroundColor: hov ? '#F8FAFC' : 'transparent',
-        transition: 'background-color 0.15s', fontSize: 13,
-      }}
-    >
-      <span style={{ fontWeight: 500, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{school.name}</span>
-      <span style={{ color: C.soft }}>{school.city}</span>
-      <span style={{ color: C.soft }}>{school.students.toLocaleString()}</span>
-      <Badge status={school.status} />
+      {children}
     </div>
   );
 }
 
 // ── AdminDashboard ─────────────────────────────────────────────
 export default function AdminDashboard() {
-  const bp = useBreakpoint();
-  const { stats, pendingOrders, revenueChart, supportTickets, schoolsStatus } = adminData;
-  const lastBar = revenueChart[revenueChart.length - 1];
-  const revenueProgress = Math.round((lastBar.revenue / lastBar.target) * 100);
-  const today = new Date().toLocaleDateString('en-PK', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const bp       = useBreakpoint();
+  const navigate = useNavigate();
+  const today    = new Date().toLocaleDateString('en-PK', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
   const isLarge   = bp === 'lg' || bp === 'xl' || bp === '2xl';
-  const statCols  = isLarge ? 4 : bp === 'sm' ? 2 : 1;
+  const statCols  = isLarge ? 3 : bp === 'sm' ? 2 : 1;
   const useTwoCol = isLarge;
+
+  // ── Stats ────────────────────────────────────────────────────
+  const [stats, setStats] = useState(null); // null = loading
+
+  useEffect(() => {
+    async function load() {
+      const [
+        { count: totalSchools },
+        { count: activeSchools },
+        { count: totalStudents },
+        { count: openTickets },
+      ] = await Promise.all([
+        supabase.from('schools').select('id', { count: 'exact', head: true }),
+        supabase.from('schools').select('id', { count: 'exact', head: true }).eq('is_active', true),
+        supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'student').eq('is_active', true),
+        supabase.from('support_tickets').select('id', { count: 'exact', head: true }).eq('status', 'open'),
+      ]);
+      setStats({
+        totalSchools:  totalSchools  ?? 0,
+        activeSchools: activeSchools ?? 0,
+        totalStudents: totalStudents ?? 0,
+        openTickets:   openTickets   ?? 0,
+      });
+    }
+    load();
+  }, []);
+
+  // ── Schools list ─────────────────────────────────────────────
+  const [schools, setSchools] = useState(null); // null = loading
+
+  useEffect(() => {
+    async function load() {
+      const { data: schoolRows } = await supabase
+        .from('schools')
+        .select('id, name, is_active')
+        .order('name', { ascending: true })
+        .limit(10);
+
+      if (!schoolRows?.length) { setSchools([]); return; }
+
+      const studentCounts = await Promise.all(
+        schoolRows.map((s) =>
+          supabase.from('profiles')
+            .select('id', { count: 'exact', head: true })
+            .eq('school_id', s.id)
+            .eq('role', 'student')
+            .eq('is_active', true)
+            .then(({ count }) => ({ id: s.id, count: count ?? 0 }))
+        )
+      );
+      const countMap = Object.fromEntries(studentCounts.map((r) => [r.id, r.count]));
+      setSchools(schoolRows.map((s) => ({ ...s, studentCount: countMap[s.id] ?? 0 })));
+    }
+    load();
+  }, []);
+
+  // ── Open support tickets ──────────────────────────────────────
+  const [tickets, setTickets] = useState(null);
+
+  useEffect(() => {
+    supabase
+      .from('support_tickets')
+      .select('id, title, role, priority, status, created_at')
+      .eq('status', 'open')
+      .order('created_at', { ascending: false })
+      .limit(8)
+      .then(({ data }) => setTickets(data ?? []));
+  }, []);
+
+  function fmtAgo(iso) {
+    const diff = Date.now() - new Date(iso).getTime();
+    const m = Math.floor(diff / 60000);
+    if (m < 60)  return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24)  return `${h}h ago`;
+    return `${Math.floor(h / 24)}d ago`;
+  }
 
   return (
     <div>
       <PageHeader
-        greeting="Good morning, Abdullah 👋"
-        subtitle={`${today} · Platform Overview`}
-        actions={<>
-          <ActionBtn icon={Plus}     label="Create School" />
-          <ActionBtn icon={Calendar} label="Close Delivery Week" />
-          <ActionBtn icon={Order}    label="View All Orders" primary />
-        </>}
+        greeting="Platform Overview"
+        subtitle={today}
+        actions={
+          <ActionBtn icon={Plus} label="Create School" primary onClick={() => navigate('/schools')} />
+        }
       />
 
       <BannerCarousel />
 
       {/* Stat cards */}
       <StatsGrid cols={statCols}>
-        <StatCard icon={School} iconColor={C.blue}   iconBg={C.blueBg}   title="Total Schools"  value={stats.totalSchools.count}                         badge={`${stats.totalSchools.active} active`}            badgeColor={{ text: C.green,  bg: C.greenBg }} />
-        <StatCard icon={Users}  iconColor={C.purple} iconBg={C.purpleBg} title="Total Students" value={stats.totalStudents.count.toLocaleString()}        badge="all schools"                                      badgeColor={{ text: C.purple, bg: C.purpleBg }} />
-        <StatCard icon={Money}  iconColor={C.sky}    iconBg={C.skyBg}    title="SaaS Revenue"   value={fmtPKR(stats.saasRevenue.amount)}                  badge={`${stats.saasRevenue.schools} schools`}           badgeColor={{ text: C.sky,    bg: C.skyBg }} />
-        <StatCard icon={Store}  iconColor={C.green}  iconBg={C.greenBg}  title="Store Revenue"  value={fmtPKR(stats.storeRevenue.amount)}                 badge={`${stats.storeRevenue.pendingOrders} pending`}    badgeColor={{ text: C.yellow, bg: C.yellowBg }} />
+        <StatCard
+          icon={School} iconColor={C.blue} iconBg={C.blueBg}
+          title="Total Schools"
+          value={stats?.totalSchools ?? '—'}
+          badge={stats ? `${stats.activeSchools} active` : '…'}
+          badgeColor={{ text: C.green, bg: C.greenBg }}
+          loading={!stats}
+        />
+        <StatCard
+          icon={Users} iconColor={C.purple} iconBg={C.purpleBg}
+          title="Total Students"
+          value={stats ? stats.totalStudents.toLocaleString() : '—'}
+          badge="all schools"
+          badgeColor={{ text: C.purple, bg: C.purpleBg }}
+          loading={!stats}
+        />
+        <StatCard
+          icon={Ticket} iconColor={C.red} iconBg={C.redBg}
+          title="Open Support Tickets"
+          value={stats?.openTickets ?? '—'}
+          badge={stats?.openTickets > 0 ? 'needs attention' : 'all clear'}
+          badgeColor={stats?.openTickets > 0
+            ? { text: C.red, bg: C.redBg }
+            : { text: C.green, bg: C.greenBg }}
+          loading={!stats}
+        />
       </StatsGrid>
-
-      {/* Middle row */}
-      {useTwoCol ? (
-        <TwoColGrid style={{ marginBottom: 16 }}>
-          <PendingOrdersCard orders={pendingOrders} />
-          <RevenueChartCard revenueChart={revenueChart} revenueProgress={revenueProgress} />
-        </TwoColGrid>
-      ) : (
-        <SingleCol style={{ marginBottom: 16 }}>
-          <PendingOrdersCard orders={pendingOrders} />
-          <RevenueChartCard revenueChart={revenueChart} revenueProgress={revenueProgress} />
-        </SingleCol>
-      )}
 
       {/* Bottom row */}
       {useTwoCol ? (
         <TwoColGrid>
-          <SupportTicketsCard tickets={supportTickets} />
-          <SchoolsStatusCard schools={schoolsStatus} />
+          <SupportTicketsCard tickets={tickets} fmtAgo={fmtAgo} navigate={navigate} />
+          <SchoolsStatusCard schools={schools} navigate={navigate} />
         </TwoColGrid>
       ) : (
         <SingleCol>
-          <SupportTicketsCard tickets={supportTickets} />
-          <SchoolsStatusCard schools={schoolsStatus} />
+          <SupportTicketsCard tickets={tickets} fmtAgo={fmtAgo} navigate={navigate} />
+          <SchoolsStatusCard schools={schools} navigate={navigate} />
         </SingleCol>
       )}
     </div>
   );
 }
 
-function PendingOrdersCard({ orders }) {
-  const bp = useBreakpoint();
+function SupportTicketsCard({ tickets, fmtAgo, navigate }) {
+  return (
+    <Card>
+      <CardHeader title="Open Support Tickets" action="View All" onAction={() => navigate('/support')} />
+      {tickets === null ? (
+        <SkeletonRows count={5} />
+      ) : tickets.length === 0 ? (
+        <EmptyMsg text="No open tickets" />
+      ) : (
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {tickets.map((t) => (
+            <li key={t.id}>
+              <HoverRow style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                borderRadius: 8, padding: '9px 10px',
+              }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <p style={{ fontSize: 13, fontWeight: 500, color: C.ink, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</p>
+                  <p style={{ fontSize: 11, color: C.muted, margin: '2px 0 0' }}>
+                    {t.role} · {fmtAgo(t.created_at)}
+                    {t.priority === 'high' && <span style={{ marginLeft: 6, fontWeight: 700, color: C.red }}>High</span>}
+                  </p>
+                </div>
+                <Badge status={t.status} />
+              </HoverRow>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function SchoolsStatusCard({ schools, navigate }) {
+  const bp       = useBreakpoint();
   const isMobile = bp === 'xs';
   return (
     <Card>
-      <CardHeader title="Pending Orders" action="View All" />
-      {!isMobile && (
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8,
-          fontSize: 10, fontWeight: 500, color: C.muted,
-          textTransform: 'uppercase', letterSpacing: '0.02em',
-          marginBottom: 6, padding: '0 8px',
-        }}>
-          <span>Student</span><span>School</span><span>Product</span><span>Pay</span><span>Status</span>
-        </div>
+      <CardHeader title="Schools" action="View All" onAction={() => navigate('/schools')} />
+      {schools === null ? (
+        <SkeletonRows count={6} />
+      ) : schools.length === 0 ? (
+        <EmptyMsg text="No schools yet" />
+      ) : (
+        <>
+          {!isMobile && (
+            <div style={{
+              display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8,
+              fontSize: 10, fontWeight: 500, color: C.muted,
+              textTransform: 'uppercase', letterSpacing: '0.02em',
+              marginBottom: 6, padding: '0 8px',
+            }}>
+              <span>School</span><span>Students</span><span>Status</span>
+            </div>
+          )}
+          {schools.map((s, i) => (
+            isMobile ? (
+              <div key={s.id} style={{ padding: '10px 8px', borderBottom: i < schools.length - 1 ? `1px solid ${C.borderLight}` : 'none' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>{s.name}</span>
+                  <Badge status={s.is_active ? 'active' : 'inactive'} />
+                </div>
+                <span style={{ fontSize: 11, color: C.soft }}>{s.studentCount.toLocaleString()} students</span>
+              </div>
+            ) : (
+              <HoverRow key={s.id} style={{
+                display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8,
+                alignItems: 'center', padding: '9px 8px', borderRadius: 8,
+                borderBottom: i < schools.length - 1 ? `1px solid ${C.borderLight}` : 'none',
+                fontSize: 13,
+              }}>
+                <span style={{ fontWeight: 500, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                <span style={{ color: C.soft }}>{s.studentCount.toLocaleString()}</span>
+                <Badge status={s.is_active ? 'active' : 'inactive'} />
+              </HoverRow>
+            )
+          ))}
+        </>
       )}
-      {orders.map((o) => <OrderRow key={o.id} order={o} isMobile={isMobile} />)}
     </Card>
   );
 }
 
-function RevenueChartCard({ revenueChart, revenueProgress }) {
+// ── Shared skeleton / empty helpers ───────────────────────────
+function SkeletonRows({ count = 4 }) {
   return (
-    <Card>
-      <CardHeader title="SaaS Revenue — 6 Month" action="Detailed Report" />
-      <ResponsiveContainer width="100%" height={180}>
-        <BarChart data={revenueChart} barGap={3} barCategoryGap="28%">
-          <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
-          <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: C.muted, fontSize: 11 }} />
-          <YAxis axisLine={false} tickLine={false} tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={fmtPKR} width={56} />
-          <Tooltip formatter={(v) => [`PKR ${v.toLocaleString()}`, '']} contentStyle={{ borderRadius: 10, border: `1px solid ${C.border}`, fontSize: 12 }} cursor={{ fill: '#F8FAFC' }} />
-          <Bar dataKey="revenue" fill={C.blue}   radius={[5, 5, 0, 0]} name="Revenue" />
-          <Bar dataKey="target"  fill={C.border} radius={[5, 5, 0, 0]} name="Target"  />
-        </BarChart>
-      </ResponsiveContainer>
-      <div style={{ marginTop: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-          <span style={{ fontSize: 11, color: C.soft }}>Target progress this month</span>
-          <span style={{ fontSize: 11, fontWeight: 700, color: C.ink }}>{revenueProgress}%</span>
-        </div>
-        <div style={{ height: 8, backgroundColor: C.canvas, borderRadius: 999, overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${revenueProgress}%`, backgroundColor: C.blue, borderRadius: 999, transition: 'width 0.5s ease' }} />
-        </div>
-      </div>
-    </Card>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} style={{ height: 36, borderRadius: 8, backgroundColor: C.borderLight }} />
+      ))}
+    </div>
   );
 }
 
-function SupportTicketsCard({ tickets }) {
-  return (
-    <Card>
-      <CardHeader title="Open Support Tickets" action="View All" />
-      <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {tickets.map((t) => <TicketRow key={t.id} ticket={t} />)}
-      </ul>
-    </Card>
-  );
-}
-
-function SchoolsStatusCard({ schools }) {
-  const bp = useBreakpoint();
-  const isMobile = bp === 'xs';
-  return (
-    <Card>
-      <CardHeader title="Schools Status" action="View All" />
-      {!isMobile && (
-        <div style={{
-          display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 8,
-          fontSize: 10, fontWeight: 500, color: C.muted,
-          textTransform: 'uppercase', letterSpacing: '0.02em',
-          marginBottom: 6, padding: '0 8px',
-        }}>
-          <span>School</span><span>City</span><span>Students</span><span>Status</span>
-        </div>
-      )}
-      {schools.map((s, i) => <SchoolRow key={s.id} school={s} last={i === schools.length - 1} isMobile={isMobile} />)}
-    </Card>
-  );
+function EmptyMsg({ text }) {
+  return <p style={{ fontSize: 13, color: C.muted, textAlign: 'center', padding: '20px 0', margin: 0 }}>{text}</p>;
 }

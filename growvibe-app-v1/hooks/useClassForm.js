@@ -129,17 +129,11 @@ export function useClassForm(sessionId, schoolId, branchId, classId) {
         }
 
         // Update class_name if changed (teacher swap RPC already updates updated_at)
-        if (nameChanged && !teacherChanged) {
+        if (nameChanged) {
+          // Also patch class_name when teacherChanged — the RPC only touches teacher_id
           const { error } = await supabase
             .from('classes')
-            .update({ class_name: class_name.trim(), updated_at: new Date().toISOString() })
-            .eq('id', classId);
-          if (error) throw new Error(error.message);
-        } else if (nameChanged && teacherChanged) {
-          // Also patch class_name — the RPC only touches teacher_id
-          const { error } = await supabase
-            .from('classes')
-            .update({ class_name: class_name.trim(), updated_at: new Date().toISOString() })
+            .update({ class_name: class_name.trim() })
             .eq('id', classId);
           if (error) throw new Error(error.message);
         }

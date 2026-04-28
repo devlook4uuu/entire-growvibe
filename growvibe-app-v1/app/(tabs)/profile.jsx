@@ -408,12 +408,18 @@ export default function ProfileScreen() {
   const dispatch = useDispatch();
   const profile = useSelector((s) => s.auth.profile);
   const [editOpen, setEditOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const interests = Array.isArray(profile?.interests) ? profile.interests : [];
 
   function confirmLogout() {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: () => dispatch(logoutThunk(profile?.id)) },
+      {
+        text: 'Sign Out', style: 'destructive', onPress: () => {
+          setLoggingOut(true);
+          dispatch(logoutThunk(profile?.id)).finally(() => setLoggingOut(false));
+        },
+      },
     ]);
   }
 
@@ -442,11 +448,15 @@ export default function ProfileScreen() {
 
         {/* Stats strip */}
         <View style={S.statsStrip}>
-          <View style={S.statItem}>
-            <Text style={[S.statValue, { color: Colors.warning }]}>★ {(profile?.grow_coins ?? 0).toLocaleString()}</Text>
-            <Text style={S.statLabel}>GrowCoins</Text>
-          </View>
-          <View style={S.statDivider} />
+          {profile?.role === 'student' && (
+            <>
+              <View style={S.statItem}>
+                <Text style={[S.statValue, { color: Colors.warning }]}>★ {(profile?.grow_coins ?? 0).toLocaleString()}</Text>
+                <Text style={S.statLabel}>GrowCoins</Text>
+              </View>
+              <View style={S.statDivider} />
+            </>
+          )}
           <View style={S.statItem}>
             <Text style={[S.statValue, { color: profile?.is_active ? Colors.success : Colors.danger }]}>
               {profile?.is_active ? 'Active' : 'Inactive'}
@@ -514,12 +524,14 @@ export default function ProfileScreen() {
         )}
 
         {/* Sign out */}
-        <TouchableOpacity style={S.signOutRow} onPress={confirmLogout} activeOpacity={0.7}>
+        <TouchableOpacity style={S.signOutRow} onPress={confirmLogout} activeOpacity={0.7} disabled={loggingOut}>
           <View style={S.signOutIcon}>
-            <Ionicons name="log-out-outline" size={18} color={Colors.danger} />
+            {loggingOut
+              ? <ActivityIndicator size="small" color={Colors.danger} />
+              : <Ionicons name="log-out-outline" size={18} color={Colors.danger} />}
           </View>
-          <Text style={S.signOutText}>Sign Out</Text>
-          <Ionicons name="chevron-forward" size={16} color={Colors.muted} style={{ marginLeft: 'auto' }} />
+          <Text style={S.signOutText}>{loggingOut ? 'Signing out…' : 'Sign Out'}</Text>
+          {!loggingOut && <Ionicons name="chevron-forward" size={16} color={Colors.muted} style={{ marginLeft: 'auto' }} />}
         </TouchableOpacity>
 
       </ScrollView>

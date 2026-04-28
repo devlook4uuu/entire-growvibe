@@ -91,12 +91,13 @@ function OffDaysPicker({ selected, onChange }) {
 // ─── Branch form ──────────────────────────────────────────────────────────────
 function BranchForm({ schoolId, branch, onSave, onClose }) {
   const isEdit = !!branch;
-  const [name,     setName]     = useState(branch?.name               || '');
-  const [address,  setAddress]  = useState(branch?.branch_address     || '');
-  const [contact,  setContact]  = useState(branch?.branch_contact     || '');
-  const [fee,      setFee]      = useState(branch?.branch_subscription_fee != null ? String(branch.branch_subscription_fee) : '');
-  const [isActive, setIsActive] = useState(branch?.is_active ?? true);
-  const [offDays,  setOffDays]  = useState(() => Array.isArray(branch?.off_days) ? branch.off_days : []);
+  const [name,          setName]          = useState(branch?.name                    || '');
+  const [address,       setAddress]       = useState(branch?.branch_address          || '');
+  const [contact,       setContact]       = useState(branch?.branch_contact          || '');
+  const [fee,           setFee]           = useState(branch?.branch_subscription_fee != null ? String(branch.branch_subscription_fee) : '');
+  const [lateThreshold, setLateThreshold] = useState(branch?.late_threshold          ? branch.late_threshold.slice(0, 5) : '08:00');
+  const [isActive,      setIsActive]      = useState(branch?.is_active ?? true);
+  const [offDays,       setOffDays]       = useState(() => Array.isArray(branch?.off_days) ? branch.off_days : []);
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState('');
 
@@ -106,7 +107,7 @@ function BranchForm({ schoolId, branch, onSave, onClose }) {
     try {
       if (!isEdit) {
         const { data: newBranch, error: insertErr } = await supabase.from('branches')
-          .insert({ school_id: schoolId, name: name.trim(), branch_address: address || null, branch_contact: contact || null, branch_subscription_fee: Number(fee) || 0, is_active: isActive })
+          .insert({ school_id: schoolId, name: name.trim(), branch_address: address || null, branch_contact: contact || null, branch_subscription_fee: Number(fee) || 0, late_threshold: lateThreshold || '08:00', is_active: isActive })
           .select('id').single();
         if (insertErr) throw new Error(insertErr.message);
         if (offDays.length > 0) {
@@ -116,7 +117,7 @@ function BranchForm({ schoolId, branch, onSave, onClose }) {
         }
       } else {
         const { error: updateErr } = await supabase.from('branches')
-          .update({ name: name.trim(), branch_address: address || null, branch_contact: contact || null, branch_subscription_fee: Number(fee) || 0, is_active: isActive, updated_at: new Date().toISOString() })
+          .update({ name: name.trim(), branch_address: address || null, branch_contact: contact || null, branch_subscription_fee: Number(fee) || 0, late_threshold: lateThreshold || '08:00', is_active: isActive, updated_at: new Date().toISOString() })
           .eq('id', branch.id);
         if (updateErr) throw new Error(updateErr.message);
         const { error: delErr } = await supabase.from('branch_off_days').delete().eq('branch_id', branch.id);
@@ -140,6 +141,15 @@ function BranchForm({ schoolId, branch, onSave, onClose }) {
       <Field label="Address" optional><TextInput value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Street, city…" /></Field>
       <Field label="Contact" optional><TextInput value={contact} onChange={(e) => setContact(e.target.value)} placeholder="Phone or email" /></Field>
       <Field label="Monthly Fee (PKR)" optional><TextInput value={fee} onChange={(e) => setFee(e.target.value)} placeholder="0" /></Field>
+      <Field label="Late Arrival Threshold" optional>
+        <input
+          type="time"
+          value={lateThreshold}
+          onChange={(e) => setLateThreshold(e.target.value)}
+          style={{ height: 38, borderRadius: 8, border: `1px solid ${C.border}`, paddingInline: 10, fontSize: 13, color: C.ink, backgroundColor: C.white, outline: 'none', width: '100%', boxSizing: 'border-box' }}
+        />
+        <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Punches at or before this time are marked Present; after it are Late. Default 08:00.</div>
+      </Field>
       <Field label="Off Days" optional><OffDaysPicker selected={offDays} onChange={setOffDays} /></Field>
       {isEdit && (
         <Field label="Status">
@@ -216,7 +226,7 @@ export default function BranchesPage() {
     buildQuery: (supabase, scope, query, from, to) => {
       let q = supabase
         .from('branches_with_off_days')
-        .select('id, school_id, name, branch_address, branch_contact, branch_subscription_fee, is_active, off_days')
+        .select('id, school_id, name, branch_address, branch_contact, branch_subscription_fee, late_threshold, is_active, off_days')
         .eq('school_id', scope)
         .order('name', { ascending: true })
         .range(from, to);

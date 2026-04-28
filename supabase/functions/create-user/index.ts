@@ -10,14 +10,15 @@
 //
 // Request body:
 //   {
-//     name:         string  (required)
-//     email:        string  (required)
-//     password:     string  (required, min 6 chars)
-//     role:         string  (required) one of: owner | principal | coordinator | teacher | student
-//     school_id?:   string  (uuid, optional — inherits from caller if not provided)
-//     branch_id?:   string  (uuid, optional — inherits from caller if not provided)
-//     class_id?:    string  (uuid, optional — for student role)
-//     student_fee?: number  (optional — for student role, defaults to 0)
+//     name:          string  (required)
+//     email:         string  (required)
+//     password:      string  (required, min 6 chars)
+//     role:          string  (required) one of: owner | principal | coordinator | teacher | student
+//     school_id?:    string  (uuid, optional — inherits from caller if not provided)
+//     branch_id?:    string  (uuid, optional — inherits from caller if not provided)
+//     class_id?:     string  (uuid, optional — for student role)
+//     student_fee?:  number  (optional — for student role, defaults to 0)
+//     biometric_id?: string  (optional — free-text biometric device identifier)
 //   }
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -78,7 +79,7 @@ Deno.serve(async (req: Request) => {
 
     // ── 3. Parse and validate body ─────────────────────────────────────────
     const body = await req.json();
-    const { name, email, password, role, school_id, branch_id, class_id, student_fee } = body;
+    const { name, email, password, role, school_id, branch_id, class_id, student_fee, biometric_id } = body;
 
     if (!name || !email || !password || !role) {
       return json({ error: 'name, email, password, and role are required' }, 400);
@@ -119,11 +120,31 @@ Deno.serve(async (req: Request) => {
     };
 
     // Inherit school/branch from caller if not explicitly provided
-    profilePayload.school_id = school_id ?? callerProfile.school_id ?? null;
-    profilePayload.branch_id = branch_id ?? callerProfile.branch_id ?? null;
+    profilePayload.school_id   = school_id ?? callerProfile.school_id ?? null;
+    profilePayload.branch_id   = branch_id ?? callerProfile.branch_id ?? null;
+    profilePayload.biometric_id = biometric_id ?? null;
 
     // Student-specific fields (always set for student role so upsert overwrites trigger defaults)
     if (role === 'student') {
+      if (!class_id) {
+        return json({ error: 'class_id is required for student accounts' }, 400);
+      }
+
+      // Validate class_id belongs to the same school to prevent cross-school assignment
+      if (class_id) {
+        const { data: classRow } = await adminClient
+          .from('classes')
+          .select('school_id')
+          .eq('id', class_id)
+          .maybeSingle();
+
+        if (!classRow) {
+          return json({ error: 'class_id not found' }, 400);
+        }
+        if (classRow.school_id !== profilePayload.school_id) {
+          return json({ error: 'class_id does not belong to the assigned school' }, 400);
+        }
+      }
       profilePayload.class_id    = class_id    || null;
       profilePayload.student_fee = student_fee ?? 0;
     }

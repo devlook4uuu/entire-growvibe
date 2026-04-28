@@ -22,6 +22,9 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const CHUNK_SIZE    = 20;
 
+// Roles that are allowed to fan-out push notifications
+const ALLOWED_ROLES = ['admin', 'owner', 'principal', 'coordinator', 'teacher', 'student'];
+
 Deno.serve(async (req) => {
   // ── CORS pre-flight ──────────────────────────────────────────────────────
   if (req.method === 'OPTIONS') {
@@ -34,10 +37,42 @@ Deno.serve(async (req) => {
     });
   }
 
-  // ── Auth guard ───────────────────────────────────────────────────────────
+  // ── Auth guard: verify JWT and caller role ───────────────────────────────
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) {
     return json({ error: 'Missing Authorization header' }, 401);
+  }
+
+  const serviceClient = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  );
+
+  // Service-role callers (e.g. cron jobs via net.http_post) bypass role check
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const isServiceRole  = authHeader === `Bearer ${serviceRoleKey}`;
+
+  if (!isServiceRole) {
+    const callerClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const { data: { user: caller }, error: authError } = await callerClient.auth.getUser();
+    if (authError || !caller) {
+      return json({ error: 'Unauthorized' }, 401);
+    }
+
+    const { data: callerProfile } = await serviceClient
+      .from('profiles')
+      .select('role')
+      .eq('id', caller.id)
+      .single();
+
+    if (!callerProfile || !ALLOWED_ROLES.includes(callerProfile.role)) {
+      return json({ error: 'Forbidden: insufficient role' }, 403);
+    }
   }
 
   // ── Parse body ───────────────────────────────────────────────────────────
@@ -55,14 +90,8 @@ Deno.serve(async (req) => {
     return json({ error: (err as Error).message }, 400);
   }
 
-  // ── Supabase client (uses caller's JWT) ──────────────────────────────────
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-  );
-
   // ── Fetch tokens for the requested users ─────────────────────────────────
-  const { data: rows, error: fetchError } = await supabase
+  const { data: rows, error: fetchError } = await serviceClient
     .from('push_tokens')
     .select('user_id, token')
     .in('user_id', userIds);
@@ -121,7 +150,7 @@ Deno.serve(async (req) => {
 
   // ── Clean up stale tokens ─────────────────────────────────────────────────
   if (staleTokens.length > 0) {
-    await supabase.from('push_tokens').delete().in('token', staleTokens);
+    await serviceClient.from('push_tokens').delete().in('token', staleTokens);
   }
 
   return json({ sent, stale: staleTokens.length });

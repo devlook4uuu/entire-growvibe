@@ -31,6 +31,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { supabase } from '../../../lib/supabase';
 import { invalidateFeeCache } from '../../../hooks/useFeeList';
+import { sendPush } from '../../../lib/notifications';
 import { Colors } from '../../../constant/colors';
 import { Fonts } from '../../../constant/fonts';
 import { hp, wp } from '../../../helpers/dimension';
@@ -199,6 +200,24 @@ export default function FeeFormScreen() {
     })();
   }, [isEdit, recordId]);
 
+  // ── Pre-fill fee amount from most recent record (add mode only) ────────────
+  useEffect(() => {
+    if (isEdit || !studentId || !sessionId) return;
+    supabase
+      .from('student_fee_records')
+      .select('fee_amount')
+      .eq('student_id', studentId)
+      .eq('session_id', sessionId)
+      .order('month', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.fee_amount != null) {
+          setFeeAmount(String(data.fee_amount));
+        }
+      });
+  }, [isEdit, studentId, sessionId]);
+
   // ── Validation ────────────────────────────────────────────────────────────
   function validate() {
     let ok = true;
@@ -233,6 +252,12 @@ export default function FeeFormScreen() {
       });
 
       if (error) { setSaveErr(error.message); return; }
+
+      // Notify student of new fee record (fire-and-forget, new records only)
+      if (!isEdit) {
+        const mLabel = MONTH_OPTIONS.find((o) => o.value === month)?.label || month;
+        sendPush([studentId], 'Fee Record', `${mLabel} fee record has been created`).catch(() => {});
+      }
 
       invalidateFeeCache(studentId, sessionId);
       router.back();

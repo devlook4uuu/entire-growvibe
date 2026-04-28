@@ -143,12 +143,13 @@ function StaffForm({ staff, role, branchId, schoolId, onSave, onClose }) {
   const isEdit  = !!staff;
   const meta    = ROLE_META[role] ?? ROLE_META.teacher;
 
-  const [name,     setName]     = useState(staff?.name  || '');
-  const [email,    setEmail]    = useState(staff?.email || '');
-  const [password, setPassword] = useState('');
-  const [isActive, setIsActive] = useState(staff?.is_active ?? true);
-  const [saving,   setSaving]   = useState(false);
-  const [error,    setError]    = useState('');
+  const [name,        setName]        = useState(staff?.name        || '');
+  const [email,       setEmail]       = useState(staff?.email       || '');
+  const [password,    setPassword]    = useState('');
+  const [biometricId, setBiometricId] = useState(staff?.biometric_id || '');
+  const [isActive,    setIsActive]    = useState(staff?.is_active ?? true);
+  const [saving,      setSaving]      = useState(false);
+  const [error,       setError]       = useState('');
 
   async function handleSubmit() {
     if (!name.trim())  return setError('Name is required.');
@@ -159,8 +160,8 @@ function StaffForm({ staff, role, branchId, schoolId, onSave, onClose }) {
       const { data: { session } } = await supabase.auth.getSession();
       const fnName = isEdit ? 'update-user' : 'create-user';
       const body   = isEdit
-        ? { user_id: staff.id, name: name.trim(), email: email.trim(), is_active: isActive, ...(password ? { password } : {}) }
-        : { name: name.trim(), email: email.trim(), password, role, school_id: schoolId, branch_id: branchId };
+        ? { user_id: staff.id, name: name.trim(), email: email.trim(), is_active: isActive, biometric_id: biometricId.trim() || null, ...(password ? { password } : {}) }
+        : { name: name.trim(), email: email.trim(), password, role, school_id: schoolId, branch_id: branchId, biometric_id: biometricId.trim() || null };
       const res = await supabase.functions.invoke(fnName, {
         body,
         headers: { Authorization: `Bearer ${session?.access_token}` },
@@ -180,6 +181,9 @@ function StaffForm({ staff, role, branchId, schoolId, onSave, onClose }) {
       </Field>
       <Field label="Email Address">
         <TextInput value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" type="email" />
+      </Field>
+      <Field label="Biometric ID" optional>
+        <TextInput value={biometricId} onChange={(e) => setBiometricId(e.target.value)} placeholder="Device biometric identifier" />
       </Field>
       <Field label={isEdit ? 'New Password' : 'Password'} optional={isEdit}>
         <TextInput value={password} onChange={(e) => setPassword(e.target.value)} placeholder={isEdit ? 'Leave blank to keep current' : 'Min. 6 characters'} type="password" />
@@ -217,18 +221,19 @@ export default function StaffPage() {
     scope: `${role}|${branchId ?? ''}`,
     pageSize: PAGE_SIZE,
     buildQuery: (sb, _scope, query, from, to) => {
+      if (!branchId) return null;
       let q = role === 'teacher'
         ? sb
             .from('teachers_with_class')
-            .select('id, name, email, avatar_url, is_active, branch_id, school_id, class_id, class_name, created_at')
-            .eq('branch_id', branchId ?? '')
+            .select('id, name, email, avatar_url, is_active, branch_id, school_id, class_id, class_name, created_at, biometric_id')
+            .eq('branch_id', branchId)
             .order('created_at', { ascending: false })
             .range(from, to)
         : sb
             .from('profiles')
-            .select('id, name, email, avatar_url, is_active, branch_id, school_id, class_id, created_at')
+            .select('id, name, email, avatar_url, is_active, branch_id, school_id, class_id, created_at, biometric_id')
             .eq('role', role)
-            .eq('branch_id', branchId ?? '')
+            .eq('branch_id', branchId)
             .order('created_at', { ascending: false })
             .range(from, to);
       if (query.trim()) q = q.or(`name.ilike.%${query.trim()}%,email.ilike.%${query.trim()}%`);

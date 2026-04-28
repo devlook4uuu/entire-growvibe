@@ -163,8 +163,8 @@ export default function SessionFormScreen() {
     if (!sessionEnd) {
       setEndError('End date is required.');
       ok = false;
-    } else if (sessionStart && sessionEnd <= sessionStart) {
-      setEndError('End date must be after start date.');
+    } else if (sessionStart && sessionEnd < sessionStart) {
+      setEndError('End date must be after or equal to start date.');
       ok = false;
     }
     return ok;

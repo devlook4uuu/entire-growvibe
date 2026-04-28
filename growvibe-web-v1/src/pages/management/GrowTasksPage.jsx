@@ -138,6 +138,24 @@ export default function GrowTasksPage() {
       if (!res.ok) throw new Error(json.error || 'Submission failed');
       setSubmitted((s) => ({ ...s, [category]: true }));
       setSelected((s) => ({ ...s, [category]: new Set() }));
+
+      // Notify selected students via push (fire-and-forget)
+      fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type':  'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey':        import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            userIds: ids,
+            title:   'GrowCoins',
+            body:    `You received ${task.coins_reward} GrowCoins for ${PANELS.find((p) => p.key === category)?.label ?? category} Improved. Keep it up!`,
+          }),
+        }
+      ).catch(() => {});
     } catch (e) {
       setError((ev) => ({ ...ev, [category]: e.message }));
     } finally {
