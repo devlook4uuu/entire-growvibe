@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "growvibe-app-v1",
-    "slug": "growvibe-app-v1",
-    "version": "1.0.0",
+    "name": "GrowVibe",
+    "slug": "growvibe",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "growvibeappv1",
@@ -15,7 +15,8 @@
       }
     },
     "android": {
-      "package": "com.abdullah010.growvibeappv1",
+      "package": "com.devlook.growvibe.app",
+      "versionCode": 5,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -52,7 +53,9 @@
       ],
       "expo-secure-store",
       "@react-native-community/datetimepicker",
-      "expo-audio"
+      "expo-audio",
+      "expo-asset",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -61,7 +64,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "8192a02a-5590-4cd4-912b-9f8929c19dc9"
+        "projectId": "cf29a250-86da-4262-bc98-19bb0d4431ee"
       }
     },
     "owner": "abdullah010"

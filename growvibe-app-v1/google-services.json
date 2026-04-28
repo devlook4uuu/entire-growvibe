@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:666590285406:android:6f60b400e34f68ca79aecf",
+        "mobilesdk_app_id": "1:666590285406:android:c7e560502379557779aecf",
         "android_client_info": {
-          "package_name": "com.abdullah010.growvibeappv1"
+          "package_name": "com.devlook.growvibe.app"
         }
       },
       "oauth_client": [],
