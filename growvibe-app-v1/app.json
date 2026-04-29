@@ -9,7 +9,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "newArchEnabled": false,
+      "newArchEnabled": true,
       "infoPlist": {
         "NSMicrophoneUsageDescription": "GrowVibe needs microphone access to record voice messages."
       }
@@ -17,7 +17,7 @@
     "android": {
       "package": "com.devlook.growvibe.app",
       "versionCode": 5,
-      "newArchEnabled": false,
+      "newArchEnabled": true,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
