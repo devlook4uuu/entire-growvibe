@@ -16,6 +16,7 @@ import { ScreenWrapper } from "../../helpers/screenWrapper";
 import { Colors } from "../../constant/colors";
 import { hp, wp } from "../../helpers/dimension";
 import { Fonts } from "../../constant/fonts";
+import { Image } from "expo-image";
 
 
 export default function TabLayout() {
@@ -144,21 +145,7 @@ export default function TabLayout() {
         </Tabs>
 
         <Pressable
-          onPress={() => {
-            try {
-              // Navigate to admin profile screen
-              router.push({
-                pathname: '/profile',
-              });
-            } catch (error) {
-              console.error('Error navigating to admin profile:', error);
-              Alert.alert(
-                'Navigation Error',
-                'Unable to open admin profile. Please try again.',
-                [{ text: 'OK' }]
-              );
-            }
-          }}
+          onPress={() => router.push("/screens/comingsoon")}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           style={{
             position: "absolute",
@@ -180,14 +167,14 @@ export default function TabLayout() {
               width: "100%",
               height: "100%",
               overflow: "visible",
-              // borderRadius: hp(4.5),
-              // backgroundColor: COLORS.primary,
+              borderRadius: hp(4.5),
+              backgroundColor: Colors.primary,
               alignItems: "center",
               justifyContent: "center",
             }}
             pointerEvents="none"
           >
-            {/* <Image
+            <Image
               transition={500}
               cachePolicy={"disk"}
               contentFit="cover"
@@ -198,7 +185,7 @@ export default function TabLayout() {
               }}
               source={require("../../assets/images/growvibe-light.png")}
               pointerEvents="none"
-            /> */}
+            />
           </View>
         </Pressable>
       </ScreenWrapper>
